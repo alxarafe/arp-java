@@ -205,7 +205,7 @@ class RuntimeTest {
     }
 
     @Test void integralDecimalMetadataRemainsExactAndRejectsFractionalKinds() {
-        for (String integer : List.of("1.00", "0.1e1", "1e10000")) {
+        for (String integer : List.of("1.00", "0.1e1", "1e127")) {
             var snapshot = catalog("{\"id\":\"exact.x\",\"type\":\"TEXT\",\"constraints\":{\"maximumLength\":" + integer + "}}");
             assertTrue(snapshot.validate("exact.x", "a").valid());
             assertTrue(snapshot.resolve("exact.x").descriptor().orElseThrow().constraints().get("maximumLength") instanceof BigDecimal);
@@ -261,4 +261,39 @@ class RuntimeTest {
         rejected(json("{\"id\":\"external.x\",\"type\":\"STRING\",\"$ref\":\"http://127.0.0.1:1/private\"}"), Code.DICTIONARY_ELEMENT_INVALID);
         rejected(yaml("apiVersion: arp.dictionary/v1\nelements: [{id: external.x, type: STRING, label: !include file:///etc/passwd}]"), Code.DICTIONARY_DOCUMENT_INVALID);
     }
+    @Test void sourceNumericBudgetsAreCheckedLexicallyBeforeConversion() {
+        for (String token : List.of("1e10000", "0e" + "9".repeat(200), "1e-129", "1e128", "1." + "0".repeat(255))) {
+            for (Source.Encoding encoding : Source.Encoding.values()) {
+                String document = encoding == Source.Encoding.JSON ? "{\"number\":" + token + "}" : "number: " + token;
+                rejected(Source.utf8("p", "numeric", encoding, document), Code.DICTIONARY_LIMIT_EXCEEDED);
+            }
+        }
+        assertEquals(0, new BigDecimal(SourceParser.sourceNumber("1." + "0".repeat(254)).toString()).compareTo(BigDecimal.ONE));
+        assertEquals(0, new BigDecimal(SourceParser.sourceNumber("0e" + "0".repeat(200) + "128").toString()).compareTo(BigDecimal.ZERO));
+        assertEquals(0, new BigDecimal(SourceParser.sourceNumber("9".repeat(128)).toString()).compareTo(new BigDecimal("9".repeat(128))));
+        assertEquals(0, new BigDecimal(SourceParser.sourceNumber("1e-128").toString()).compareTo(new BigDecimal("1e-128")));
+    }
+
+    @Test void yamlRejectsHostEscapesContinuationsAndExplicitBlockIndentation() {
+        for (String text : List.of("a: \"\\x41\"", "a: \"\\N\"", "a: \"first\\\n  second\"", "a: 'first\n  second'", "a: first\n  second", "a: |2\n  text\n"))
+            rejected(yaml(text), Code.DICTIONARY_DOCUMENT_INVALID);
+        var parsed = (Map<?, ?>) new SourceParser(Limits.DEFAULT).parse(yaml("a: \"\\/\\b\\f\\n\\r\\t\\uD83D\\uDE00\""));
+        assertEquals("/\b\f\n\r\t😀", parsed.get("a"));
+    }
+
+    @Test void yamlBlockChompingAndFoldedParagraphsPreserveText() {
+        for (String header : List.of("|", "|-", "|+", ">", ">-", ">+")) {
+            var parsed = (Map<?, ?>) new SourceParser(Limits.DEFAULT).parse(yaml("a: " + header + "\n  first\n  second\n\n"));
+            String body = header.startsWith("|") ? "first\nsecond" : "first second";
+            assertEquals(body + (header.endsWith("-") ? "" : header.endsWith("+") ? "\n\n" : "\n"), parsed.get("a"));
+        }
+    }
+
+    @Test void fixtureComparisonUsesMathematicalNumbersAndDistinctBooleans() throws Exception {
+        var json = ConformanceTest.JSON;
+        ConformanceTest.assertJson(json.readTree("[1,1e127]"), json.readTree("[1.00,10e126]"));
+        assertThrows(AssertionError.class, () -> ConformanceTest.assertJson(json.readTree("true"), json.readTree("1")));
+        assertThrows(AssertionError.class, () -> ConformanceTest.assertJson(json.readTree("9007199254740993"), json.readTree("9007199254740992")));
+    }
+
 }

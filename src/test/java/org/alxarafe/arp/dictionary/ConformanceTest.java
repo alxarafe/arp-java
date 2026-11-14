@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Executes original expectations, never PHP output or copied fixture values. */
 @Execution(ExecutionMode.SAME_THREAD)
 class ConformanceTest {
-    static final String SHA = "0172ab64742218b9f64a6ae96c43ebdfe690f4c6";
+    static final String SHA = "2dde1a09780e29c7385606c5e018fa75a0808b68";
     static final Path ROOT = Path.of(System.getProperty("arp.contract.path")).toAbsolutePath().normalize();
     static final Path DIR = ROOT.resolve("fixtures/dictionary/v1");
     static final ObjectMapper JSON = JsonSupport.reader(new Limits(4_194_304, 2048, 128));
@@ -62,7 +62,19 @@ class ConformanceTest {
                     ((com.fasterxml.jackson.databind.node.ObjectNode) projection.get("issues").get(i)).remove("elementId");
             }
         }
-        assertEquals(expected, projection);
+        assertJson(expected, projection);
+    }
+
+    static void assertJson(JsonNode expected, JsonNode actual) {
+        if (expected.isNumber() && actual.isNumber()) { assertEquals(0, expected.decimalValue().compareTo(actual.decimalValue())); return; }
+        assertEquals(expected.getNodeType(), actual.getNodeType());
+        if (expected.isObject()) {
+            assertEquals(expected.size(), actual.size());
+            expected.fieldNames().forEachRemaining(key -> { assertTrue(actual.has(key), key); assertJson(expected.get(key), actual.get(key)); });
+        } else if (expected.isArray()) {
+            assertEquals(expected.size(), actual.size());
+            for (int i = 0; i < expected.size(); i++) assertJson(expected.get(i), actual.get(i));
+        } else assertEquals(expected, actual);
     }
 
     @TestFactory Stream<DynamicTest> sharedFixtures() throws Exception {
@@ -94,6 +106,11 @@ class ConformanceTest {
                 assertTrue(path.startsWith(DIR));
                 var source = new Source("fixture", intake.path("id").asText(), Source.Encoding.valueOf(intake.path("encoding").asText().toUpperCase(java.util.Locale.ROOT)), Files.readAllBytes(path));
                 compare(BUILDER.buildCatalog(List.of(source)).projection(), intake.get("expected"), true);
+            }));
+            if (intake.has("descriptorProjection")) tests.add(vector("source-descriptors", intake.path("id").asText(), () -> {
+                var source = new Source("fixture", intake.path("id").asText(), Source.Encoding.valueOf(intake.path("encoding").asText().toUpperCase(java.util.Locale.ROOT)), Files.readAllBytes(ROOT.resolve(intake.path("path").asText())));
+                var result = BUILDER.buildCatalog(List.of(source)); assertTrue(result.valid());
+                compare(result.catalog().orElseThrow().resolve(intake.path("descriptorProjection").path("id").asText()).descriptor().orElseThrow().projection(), intake.get("descriptorProjection"), false);
             }));
         }
         for (var pattern : read(DIR.resolve(manifest.path("sets").path("patterns").asText()))) {
