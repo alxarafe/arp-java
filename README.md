@@ -6,7 +6,7 @@ and normalization, explicit JSON/YAML source registration and immutable catalogs
 No Spring, application framework, ERP, database, HTTP or persistence is required.
 
 Contract authority: `alxarafe/arp-contract` commit
-`0172ab64742218b9f64a6ae96c43ebdfe690f4c6`, recorded in `contract.ref`.
+`2dde1a09780e29c7385606c5e018fa75a0808b68`, recorded in `contract.ref`.
 The contract has not been released; these results concern that exact candidate.
 PHP output is neither an oracle nor a source of expected test results.
 
@@ -72,9 +72,11 @@ Neither runtime parser brings an application framework.
 
 JSON uses duplicate detection and arbitrary-precision numeric decoding. UTF-8 is
 decoded strictly, and all parsed strings/keys are checked for unpaired surrogates.
-Trailing roots are rejected. YAML uses the engine's YAML 1.2 JSON schema;
+Trailing roots are rejected. YAML uses an explicit ARP scalar resolver;
 `yes/no/on/off` and plain dates remain strings. Block/flow collections and quoted,
-plain, literal and folded scalars are supported. Both token and event passes
+plain single-line scalars and literal/folded block text are supported. Double-quoted
+strings use JSON escapes only; multiline continuations and explicit block indent
+indicators are rejected. Both token and event passes
 reject directives (including unknown ones), tags, anchors, aliases and multiple
 documents. Node conversion rejects duplicate keys, merge keys and non-string
 mapping keys. No YAML object construction, environment expansion, custom tag
@@ -90,9 +92,11 @@ Base64 must decode and re-encode identically.
 Default per-source budgets are 1 MiB UTF-8 bytes, 2048 elements and 128 collection
 nesting levels, configurable through `Limits`. Depth is checked before recursive
 YAML node conversion. The fixed contractual limits remain 4096 numeric digits,
-512 pattern characters and 4096 code points for pattern inputs. There is no
-additional 4096-exponent limit for metadata: integral `1e10000` remains exact,
-without expanding it into a large integer just to compare a length.
+512 pattern characters and 4096 code points for pattern inputs. All unquoted source numbers are checked before numeric conversion: at most 256
+ASCII characters, absolute exponent at most 128 and absolute magnitude below
+`10^128`. Numeric constraint strings retain their separate scalar rules.
+Customized byte/element/depth limits describe a nonportable resource profile;
+the default profile matches the common contract.
 
 ## Build and tests
 

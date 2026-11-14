@@ -29,3 +29,15 @@ contract file or PHP implementation was modified.
 These are proposals for common review, not changes to ARP semantics or claims of
 PHP/Java equivalence outside the actual shared fixtures. Snapshot concurrency and
 parser security still require stack-specific instrumentation, beyond JSON vectors.
+
+## Consolidation 002 resolution
+
+The five observations above are historical feedback against `0172ab6`.
+Contract `2dde1a09780e29c7385606c5e018fa75a0808b68` resolves them with
+a mandatory YAML subset, exact bounded source numbers, shared depth/resource
+budgets and explicit geometry wording. This implementation follows those decisions.
+The prior acceptance test for `1e10000` was deliberately changed to admitted
+`1e127`; oversized exponents now receive DICTIONARY_LIMIT_EXCEEDED before
+BigDecimal conversion. No public API or scalar-string arithmetic was changed.
+No remaining contradiction was found during the 327 shared assertions and
+27 Java regressions. Shared fixtures are representative rather than exhaustive.

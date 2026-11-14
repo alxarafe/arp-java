@@ -1,130 +1,74 @@
-# ARP-DICT-001-JAVA-001 acceptance evidence
+# ARP-DICT-001-RUNTIME-002 Java acceptance evidence
 
-Date: 2026-11-14. Branch: `feature/arp-dict-001-java`.
-Contract commit: `0172ab64742218b9f64a6ae96c43ebdfe690f4c6`.
-Feature/format: ARP-DICT-001 / `arp.dictionary/v1`.
-The implementation commit is the Git commit containing this report; the delivery
-identifies its SHA. This is an unpublished contract candidate, not adoption of a
-published release. No PHP output was used as an expected outcome.
+Date: 2026-11-14. Branch: `feature/arp-dict-001-portability-002`.
+Contract: `2dde1a09780e29c7385606c5e018fa75a0808b68` (recorded in `contract.ref`).
+The implementation SHA is the local commit containing this report.
 
-## Actual functional results
+## Results
 
-| Original fixture group | Passed | Failed | Not executed |
+| Group | Passed | Failed | Not executed |
 | --- | ---: | ---: | ---: |
-| Baseline 17-type catalog | 1 | 0 | 0 |
-| Values / normalization | 132 | 0 | 0 |
-| Definitions | 34 | 0 | 0 |
-| Sources / registration | 21 | 0 | 0 |
-| Pattern grammar | 45 | 0 | 0 |
-| Pattern matching samples | 21 | 0 | 0 |
-| Catalog steps (13 scenarios) | 32 | 0 | 0 |
-| Complete descriptor projections | 12 | 0 | 0 |
-| **Shared dynamic JUnit cases** | **298** | **0** | **0** |
-| Java-specific runtime tests | 23 | 0 | 0 |
-| **Maven/JUnit total** | **321** | **0** | **0** |
+| Base catalog | 1 | 0 | 0 |
+| Values | 136 | 0 | 0 |
+| Definitions | 36 | 0 | 0 |
+| Sources | 40 | 0 | 0 |
+| Source descriptor projections | 4 | 0 | 0 |
+| Patterns | 45 | 0 | 0 |
+| Matching samples | 21 | 0 | 0 |
+| Catalog steps | 32 | 0 | 0 |
+| Catalog descriptor projections | 12 | 0 | 0 |
+| **Shared** | **327** | **0** | **0** |
+| Java-specific | 27 | 0 | 0 |
+| **Total JUnit** | **354** | **0** | **0** |
 
-The manifest and all referenced sets are consumed directly from the original
-pinned checkout. Expected outputs are neither copied nor regenerated from an
-implementation. Values compare complete outcomes, ordered issues, absence of a
-normalized value on rejection and exact JSON model projections. Definition/source
-diagnostic identities are excluded when the original expectation omits them.
-Unpaired-surrogate and invalid-byte fixtures reach their intended boundaries.
+The runner consumes the pinned original manifest and fixture bytes directly.
+Complete source projections are verified separately. JSON numbers compare by
+exact BigDecimal mathematical equality; booleans and strings remain distinct.
+The generated [machine summary](conformance-summary.json) records actual results.
+No shared cases were excluded and expectations were not copied or regenerated.
 
-`RuntimeTest` separately exercises:
+The original 23 Java tests remain, including immutability, defensive copying,
+concurrency, isolation, atomicity, Unicode, seven-digit UTC calendar bounds,
+1 MiB/2048 elements/depth, security and exact numeric export. The formerly
+unbounded exponent acceptance is updated explicitly to the common contract.
+Four additional regression methods check padded/zero exponent attacks, exact
+numeric token/magnitude boundaries, YAML extensions/JSON escapes, block chomping
+and the runner's exact number/kind comparison. No public API changed.
 
-- Defensive byte copying and deep immutability of descriptor/result collections.
-- Atomic rejection, independent contexts and sorted IDs without discovery.
-- 32 simultaneous builds with repeated validation, and eight readers observing
-  complete snapshots while 100 replacements and failed duplicate builds execute.
-- Acceptance of exactly 1 MiB and 2048 definitions; rejection above configured
-  byte/element/depth budgets for both source encodings.
-- Null/escaped duplicate keys; tags, anchors, aliases, merges, unknown/recognized
-  directives, multiple documents, malformed Unicode and external-reference syntax.
-- Literal block text with dangerous-looking symbols, YAML/JSON exact equivalence,
-  YAML 1.2 scalar resolution, large integer metadata and integral exponent export.
-- All ASCII controls in pattern contexts, bounded ambiguous repetitions, exact
-  seven-digit UTC normalization under several system timezones and UTC year bounds.
+## Reproduction and tooling
 
-## Environment and reproducibility
-
-Actual runtime: Eclipse Adoptium Java **25.0.4.1**, Maven **3.9.16**, Linux amd64,
-using the local `maven:3.9-eclipse-temurin-25` image. The host has Java 25.0.3 and
-no Maven; no host Maven installation or alternative Java release was used.
-Initial dependency acquisition used network access; acceptance runs use the local
-Maven cache, Docker `--network none`, Maven `-o` and a read-only contract mount.
-
-Reproduce from this repository:
+Actual environment: Eclipse Adoptium Java **25.0.4.1**, Maven **3.9.16**, Linux
+amd64, local `maven:3.9-eclipse-temurin-25`. Dependencies unchanged: Jackson
+2.18.2, SnakeYAML Engine 2.9 and test-only JUnit Jupiter 5.11.4.
 
 ```sh
-docker run --rm --network none --user "$(id -u):$(id -g)" -e MAVEN_CONFIG=/tmp \
-  -v "$PWD:/work" -v /tmp/arp-java-m2:/m2 \
-  -v /tmp/arp-contract-main:/contract:ro -w /work \
+docker run --rm --network none --user 1000:1000 -e MAVEN_CONFIG=/tmp \
+  -v "$PWD:/work" -v /tmp/arp-java-m2:/m2:ro \
+  -v /home/rsanjose/Desarrollo/Alxarafe/arp-contract:/contract:ro -w /work \
   maven:3.9-eclipse-temurin-25 \
   mvn -o -B -Dmaven.repo.local=/m2 -Darp.contract.path=/contract clean verify
-
-bash scripts/check-contract.sh /tmp/arp-contract-main
 ```
 
-Surefire XML/text reports are generated in `target/surefire-reports/`. The runner
-writes `target/conformance-summary.json`; [the recorded summary](conformance-summary.json)
-is captured from that output, not from expected data. The library JAR is built
-locally under `target/`; nothing is installed to a remote repository or published.
+Surefire reports and the local JAR are generated under ignored `target/`.
+The contract-only checks were executed separately by the coordinating task:
+`tools/check_contract.py` PASS (327 inventoried), and unittest **27/27** PASS.
+These structural checks are separate from the 354 native JUnit cases.
 
-Runtime dependencies: Jackson Databind/Core/Annotations 2.18.2 and SnakeYAML
-Engine 2.9. Test-only dependency: JUnit Jupiter 5.11.4. No application framework.
+## Changes and remaining observations
 
-## Separate structural controls
+SourceParser adds raw JSON token preflight before Jackson numeric conversion,
+YAML scalar token/style guards and an explicit ARP plain scalar resolver.
+BigInteger/BigDecimal preserve admitted source values, numeric JSON kinds and
+export precision. SnakeYAML remains only a safe syntax/block-text provider;
+its extra scalar syntax and implicit type choices are not authority.
+The public API, independent catalog ownership and validation architecture remain
+as documented in [architecture](architecture.md).
 
-The original contract's schema/metaschema and fixture-integrity checker passes.
-Its **12 checker regression tests pass**, separately from the 321 Java tests.
-Its printed `NOT EXECUTED: semantic conformance` line describes the checker itself;
-it does not describe the Java suite executed here.
+Modified files: README.md, contract.ref, docs/conformance.md,
+docs/conformance-summary.json, docs/contract-feedback.md, SourceParser.java,
+ConformanceTest.java and RuntimeTest.java (source files under the existing
+`org/alxarafe/arp/dictionary` main/test package paths).
 
-The structural script verifies the same contract SHA and disables Python bytecode
-writes. `.openidea/` remains ignored; `git diff --check` is part of final review.
-No tracked files in `arp-contract`, `arp-php` or other repositories were changed.
-
-## Limits of this evidence
-
-No shared fixture was skipped. The vectors are representative, not an exhaustive
-proof of all possible inputs. The configurable 128-level source nesting budget is
-an implementation resource ceiling; shared budgets and YAML spelling coverage
-are proposed for review in [contract feedback](contract-feedback.md).
-
-ERP integration, persistence, CRUD, presentation, cross-language native API
-comparison and adoption of a published contract release were not executed: these
-are outside scope. No support for Java versions other than 25 is claimed. No
-push, PR, tag, merge, release or publication is part of this delivery.
-
-## Files created or modified
-
-- `README.md` (modified).
-- `contract.ref` (new).
-- `docs/architecture.md` (new).
-- `docs/conformance-summary.json` (new).
-- `docs/conformance.md` (new).
-- `docs/contract-feedback.md` (new).
-- `pom.xml` (new).
-- `scripts/check-contract.sh` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/BuildResult.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Catalog.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/CatalogBuilder.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Code.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/DefinitionParser.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Descriptor.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Issue.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/JsonSupport.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Limits.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Numbers.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/PortablePattern.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Provenance.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Rejected.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Resolution.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/ScalarType.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/ScalarValidator.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Source.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/SourceParser.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/Unicode.java` (new).
-- `src/main/java/org/alxarafe/arp/dictionary/ValidationResult.java` (new).
-- `src/test/java/org/alxarafe/arp/dictionary/ConformanceTest.java` (new).
-- `src/test/java/org/alxarafe/arp/dictionary/RuntimeTest.java` (new).
+No new unresolved contractual contradiction was found. The old feedback is
+resolved by consolidation 002; see [historical feedback and resolution](contract-feedback.md).
+No other repository was modified. No push, PR, tag, merge or package publication.
