@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Executes original expectations, never PHP output or copied fixture values. */
 @Execution(ExecutionMode.SAME_THREAD)
 class ConformanceTest {
-    static final String SHA = "2dde1a09780e29c7385606c5e018fa75a0808b68";
+    static final String SHA = "4c0f4bd0337c01c15a036910b6462e6f0e674927";
     static final Path ROOT = Path.of(System.getProperty("arp.contract.path")).toAbsolutePath().normalize();
     static final Path DIR = ROOT.resolve("fixtures/dictionary/v1");
     static final ObjectMapper JSON = JsonSupport.reader(new Limits(4_194_304, 2048, 128));
@@ -37,7 +37,7 @@ class ConformanceTest {
         assertEquals(0, process.waitFor());
         assertEquals(SHA, actual, "Use the exact pinned contract checkout");
         assertEquals(SHA, Files.readString(Path.of("contract.ref")).trim());
-        assertEquals(0, new ProcessBuilder("git", "-C", ROOT.toString(), "diff", "--quiet", "HEAD", "--", "fixtures", "schemas", "docs/features/arp-dict-001.md").start().waitFor(), "Contract inputs must not be edited");
+        assertEquals(0, new ProcessBuilder("git", "-C", ROOT.toString(), "diff", "--quiet", "HEAD", "--", "fixtures", "schemas", "docs/features/arp-dict-001.md", "docs/dictionary-portability-002.md", "docs/dictionary-checks.md").start().waitFor(), "Contract inputs must not be edited");
     }
 
     static JsonNode read(Path path) throws Exception { return JSON.readTree(Files.readAllBytes(path)); }
