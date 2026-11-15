@@ -296,4 +296,14 @@ class RuntimeTest {
         assertThrows(AssertionError.class, () -> ConformanceTest.assertJson(json.readTree("9007199254740993"), json.readTree("9007199254740992")));
     }
 
+    @Test void compactSequenceBlockFollowedByPortableScalarPreservesBothFields() {
+        for (String header : List.of("|", ">-")) {
+            var result = BUILDER.buildCatalog(List.of(yaml("apiVersion: arp.dictionary/v1\nelements:\n  - description: " + header + "\n      first\n      second\n    label: 2025-01-02\n    id: compact.block\n    type: TEXT\n")));
+            assertTrue(result.valid(), () -> result.issues().toString());
+            var descriptor = result.catalog().orElseThrow().resolve("compact.block").descriptor().orElseThrow();
+            assertEquals("2025-01-02", descriptor.label().orElseThrow());
+            assertEquals(header.equals("|") ? "first\nsecond\n" : "first second", descriptor.description().orElseThrow());
+        }
+    }
+
 }
