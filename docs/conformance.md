@@ -1,8 +1,35 @@
-# ARP-DICT-001-RUNTIME-002 Java acceptance evidence
+# ARP-DICT-001 v0.1.0 RC1 — Java acceptance evidence
 
-Date: 2026-11-15. Branch: `feature/arp-dict-001-portability-002`.
-Contract: `2dde1a09780e29c7385606c5e018fa75a0808b68` (recorded in `contract.ref`).
-The implementation SHA is the local commit containing this report.
+Date: 2026-11-15. Branch: `release/arp-dict-001-v0.1.0-rc1`.
+Contract repository: `alxarafe/arp-contract`.
+Annotated remote tag: `v0.1.0-rc.1`.
+Tag object: `192dc1ce0ceab1a2b2f4545a4e327cde2e0fc5d5`.
+Peeled commit / strict runner pin / `contract.ref`:
+`4c0f4bd0337c01c15a036910b6462e6f0e674927`.
+
+Updated main and implementation base: `3a14a5ea1460ab6caaf634dc538292cefcb74c81`.
+The local acceptance commit is the commit containing this report (obtain it with
+`git rev-parse HEAD`). No production source, public API, dependencies or fixture
+expectations changed. This work updates contract identity, strict input checks
+and evidence only. Earlier portability implementation reports remain in Git history.
+
+## Authority and verification
+
+`git ls-remote --tags origin 'v0.1.0-rc.1*'` in the contract repository returned
+both the tag object and its peeled commit above. In an independent temporary
+clone, `git cat-file -t 192dc1ce0ceab1a2b2f4545a4e327cde2e0fc5d5` returned
+`tag`, and `git cat-file -p` confirmed its target type `commit`, exact SHA and tag
+name. Thus the remote reference is annotated and targets the required commit.
+`arp-contract` was not changed; the tests read `/tmp/arp-java-contract-rc1`, a
+separate detached clone with clean tree and exact HEAD. Fixtures, schema and
+normative feature contents are unchanged from portability consolidation 002.
+
+The runner requires the exact checkout HEAD and matching `contract.ref`, and
+checks tracked input changes against HEAD for fixtures, schemas and all three
+normative feature/portability/checks documents. It processes the original manifest
+without exclusions or expectation changes. Numbers compare mathematically with
+BigDecimal; booleans and strings remain distinct. Complete projections include
+all four source descriptors.
 
 ## Results
 
@@ -20,82 +47,49 @@ The implementation SHA is the local commit containing this report.
 | **Shared** | **327** | **0** | **0** |
 | Java-specific | 28 | 0 | 0 |
 | **Total JUnit** | **355** | **0** | **0** |
+| Contract tool regression methods | 27 | 0 | 0 |
 
-The runner consumes the pinned original manifest and fixture bytes directly.
-Complete source projections are verified separately. JSON numbers compare by
-exact BigDecimal mathematical equality; booleans and strings remain distinct.
-The generated [machine summary](conformance-summary.json) records actual results.
-No shared cases were excluded and expectations were not copied or regenerated.
+Contract structural/schema/fixture integrity: PASS, 327 runtime assertions
+inventoried. These structural checks are separate from the native runtime passes.
+The unchanged Java regressions cover concurrency, isolation, immutable snapshots,
+atomic generation behavior, exact numeric limits/export, byte/element/depth limits,
+Unicode and security, including compact YAML blocks followed by date text.
+The generated [machine summary](conformance-summary.json) records the actual RC run.
+`git diff --check` passed.
 
-The original 23 Java tests remain, including immutability, defensive copying,
-concurrency, isolation, atomicity, Unicode, seven-digit UTC calendar bounds,
-1 MiB/2048 elements/depth, security and exact numeric export. The formerly
-unbounded exponent acceptance is updated explicitly to the common contract.
-Four additional regression methods check padded/zero exponent attacks, exact
-numeric token/magnitude boundaries, YAML extensions/JSON escapes, block chomping
-and the runner's exact number/kind comparison. No public API changed.
+## Environment and reproduction
 
-## Reproduction and tooling
-
-Actual environment: Eclipse Adoptium Java **25.0.4.1**, Maven **3.9.16**, Linux
-amd64, local `maven:3.9-eclipse-temurin-25`. Dependencies unchanged: Jackson
-2.18.2, SnakeYAML Engine 2.9 and test-only JUnit Jupiter 5.11.4.
+Linux amd64; Docker image `maven:3.9-eclipse-temurin-25`, Maven 3.9.16,
+Eclipse Adoptium Java 25.0.4.1. Jackson 2.18.2, SnakeYAML Engine 2.9,
+JUnit Jupiter 5.11.4. Contract tools: Python 3.14.4, jsonschema 4.19.2,
+PyYAML 6.0.3 (matching pinned requirements). Final native build completed
+2026-11-15 08:19:18 UTC with 355 tests, no failures, errors or skips.
 
 ```sh
+git clone --no-hardlinks --no-checkout /home/rsanjose/Desarrollo/Alxarafe/arp-contract /tmp/arp-java-contract-rc1
+git -C /tmp/arp-java-contract-rc1 checkout --detach 4c0f4bd0337c01c15a036910b6462e6f0e674927
+
 docker run --rm --network none --user 1000:1000 -e MAVEN_CONFIG=/tmp \
   -v "$PWD:/work" -v /tmp/arp-java-m2-20261115:/m2:ro \
-  -v /home/rsanjose/Desarrollo/Alxarafe/arp-contract:/contract:ro -w /work \
+  -v /tmp/arp-java-contract-rc1:/contract:ro -w /work \
   maven:3.9-eclipse-temurin-25 \
   mvn -o -B -Dmaven.repo.local=/m2 -Darp.contract.path=/contract clean verify
+
+cd /tmp/arp-java-contract-rc1
+PYTHONDONTWRITEBYTECODE=1 python3 tools/check_contract.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ```
 
-Surefire reports and the local JAR are generated under ignored `target/`.
-The contract-only checks were executed separately by the coordinating task:
-`tools/check_contract.py` PASS (327 inventoried), and unittest **27/27** PASS.
-These structural checks are separate from the 355 native JUnit cases.
+The Maven cache was already populated for these pinned dependencies. No network
+was used by the final native tests or contract checks. Generated JAR and Surefire
+reports stay under ignored `target/`; no package was published.
 
-## Changes and remaining observations
+## Scope and Git state
 
-SourceParser adds raw JSON token preflight before Jackson numeric conversion,
-YAML scalar token/style guards and an explicit ARP plain scalar resolver.
-BigInteger/BigDecimal preserve admitted source values, numeric JSON kinds and
-export precision. SnakeYAML remains only a safe syntax/block-text provider;
-its extra scalar syntax and implicit type choices are not authority.
-The public API, independent catalog ownership and validation architecture remain
-as documented in [architecture](architecture.md).
-
-Modified files: README.md, contract.ref, docs/conformance.md,
-docs/conformance-summary.json, docs/contract-feedback.md, SourceParser.java,
-ConformanceTest.java and RuntimeTest.java (source files under the existing
-`org/alxarafe/arp/dictionary` main/test package paths).
-
-No new unresolved contractual contradiction was found. The old feedback is
-resolved by consolidation 002; see [historical feedback and resolution](contract-feedback.md).
-No other repository was modified. No push, PR, tag, merge or package publication.
-
-## Reverification from updated main (2026-11-15)
-
-`git pull --ff-only origin main` confirmed main at `5c3ff2a`, which already
-contains the runtime-002 implementation. The old feature branch `a143c61`
-had the same tree but separate squash history. It was preserved locally as
-`backup/arp-dict-001-portability-002-a143c61`; the requested feature branch was
-then created from updated main. No history was discarded or published.
-
-This work adds one independent Java regression in `RuntimeTest.java`: literal
-and folded text as the first field of a compact sequence mapping, followed by
-a plain date label. Both exact block content and the unchanged date string pass.
-Production behavior already met this case; no API or parser change was needed.
-The existing token/exponent/magnitude, exact numeric comparison, concurrency,
-isolation, immutability, limits and security regressions all pass again.
-
-Fresh `clean verify` completed at 2026-11-15 07:46:05 UTC without network:
-327/327 original shared assertions (including four source projections),
-28/28 Java-specific methods, 355 total, no failures/errors/skips. The generated
-`target/conformance-summary.json` confirms the shared counts above. Only
-`src/test/java/org/alxarafe/arp/dictionary/RuntimeTest.java` and this evidence
-file changed relative to updated main. `git diff --check` passed.
-
-The historical temporary Maven cache was absent, and the user cache lacked
-SnakeYAML Engine 2.9. Pinned dependencies were downloaded into a fresh writable
-`/tmp/arp-java-m2-20261115` cache; the final verification mounted it read-only
-with `--network none`. Dependencies and build configuration did not change.
+Changed files: `README.md`, `contract.ref`, `docs/conformance.md`,
+`docs/conformance-summary.json`, and
+`src/test/java/org/alxarafe/arp/dictionary/ConformanceTest.java`.
+Only `arp-java` was modified. Main was clean before its fast-forward update;
+the RC branch was created from updated main. No contract incompatibility was
+found. The required delivery is a local commit with clean tree; no push, PR,
+merge, runtime tag or package publication was performed.

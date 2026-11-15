@@ -6,8 +6,8 @@ and normalization, explicit JSON/YAML source registration and immutable catalogs
 No Spring, application framework, ERP, database, HTTP or persistence is required.
 
 Contract authority: `alxarafe/arp-contract` commit
-`2dde1a09780e29c7385606c5e018fa75a0808b68`, recorded in `contract.ref`.
-The contract has not been released; these results concern that exact candidate.
+`4c0f4bd0337c01c15a036910b6462e6f0e674927`, recorded in `contract.ref`.
+Annotated contract tag: `v0.1.0-rc.1`. These results concern that exact release candidate; no final release is implied.
 PHP output is neither an oracle nor a source of expected test results.
 
 ## Public API
