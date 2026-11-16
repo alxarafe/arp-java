@@ -15,6 +15,8 @@ final class Numbers {
             ScalarType.INT32, new String[]{"-2147483648", "2147483647"}, ScalarType.UINT32, new String[]{"0", "4294967295"},
             ScalarType.INT64, new String[]{"-9223372036854775808", "9223372036854775807"});
 
+    static String[] integerRange(ScalarType type) { return RANGES.get(type).clone(); }
+
     private Numbers() {}
     static BigDecimal parse(Object value, ScalarType type) {
         Pattern grammar = type == ScalarType.DECIMAL ? DECIMAL : type.name().startsWith("UINT") ? UNSIGNED : SIGNED;
