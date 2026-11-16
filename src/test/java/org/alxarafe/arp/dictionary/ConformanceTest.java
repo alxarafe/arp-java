@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Executes original expectations, never PHP output or copied fixture values. */
 @Execution(ExecutionMode.SAME_THREAD)
 class ConformanceTest {
-    static final String SHA = "4c0f4bd0337c01c15a036910b6462e6f0e674927";
+    static final String SHA = "7a62bba0e8f84dbc198e837baf63fc7e0d8722e1";
     static final Path ROOT = Path.of(System.getProperty("arp.contract.path")).toAbsolutePath().normalize();
     static final Path DIR = ROOT.resolve("fixtures/dictionary/v1");
     static final ObjectMapper JSON = JsonSupport.reader(new Limits(4_194_304, 2048, 128));

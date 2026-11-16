@@ -1,4 +1,4 @@
-# ARP Java scalar dictionary
+# ARP Java dictionary and CDS read metadata
 
 Standalone Java 25 / Maven library for the approved **ARP-DICT-001** candidate,
 format `arp.dictionary/v1`. It implements the 17 scalar types, exact validation
@@ -6,9 +6,9 @@ and normalization, explicit JSON/YAML source registration and immutable catalogs
 No Spring, application framework, ERP, database, HTTP or persistence is required.
 
 Contract authority: `alxarafe/arp-contract` commit
-`4c0f4bd0337c01c15a036910b6462e6f0e674927`, recorded in `contract.ref`.
-Annotated contract tag: `v0.1.0-rc.1`. These results concern that exact release candidate; no final release is implied.
-PHP output is neither an oracle nor a source of expected test results.
+`7a62bba0e8f84dbc198e837baf63fc7e0d8722e1`, recorded in `contract.ref`.
+The original scalar RC tag remains `v0.1.0-rc.1` at `4c0f4bd0337c01c15a036910b6462e6f0e674927`.
+No final normative release is implied. PHP output is never a test oracle.
 
 ## Public API
 
@@ -141,3 +141,9 @@ the same verification offline. No application services are started.
 
 See [architecture](docs/architecture.md), [conformance evidence](docs/conformance.md)
 and [contract feedback](docs/contract-feedback.md).
+
+
+## CDS read metadata
+
+The pure resolver, generation publication API, exact shared scenarios and limits are documented in
+[ARP-CDS-READ-002](docs/cds-read-002.md). This adds no HTTP, SQL, ORM or persistence dependency.
