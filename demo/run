@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+contract="${ARP_CONTRACT_PATH:-$root/../arp-contract}"
+name="${ARP_DEMO_CONTAINER:-arp-demo-java-${UID}}"
+port="${ARP_DEMO_PORT:-5200}"
+origin="${ARP_DEMO_ORIGIN:-http://127.0.0.1:4173}"
+image="arp-demo-java:local-$(printf '%s' "$root" | sha256sum | cut -c1-12)"
+created_id=''
+mkdir -p "$root/demo/.artifacts"
+remove_owned() {
+    local id="$1" owner kind
+    if ! docker container inspect "$id" >/dev/null 2>&1; then
+        return
+    fi
+    owner="$(docker inspect --format '{{index .Config.Labels "arp.demo.owner"}}' "$id")"
+    kind="$(docker inspect --format '{{index .Config.Labels "arp.demo"}}' "$id")"
+    if [[ "$owner" != "$root" || "$kind" != java-dictionary ]]; then
+        echo 'Refusing to remove a container not owned by this demo checkout.' >&2
+        return 1
+    fi
+    docker stop --time 10 "$id" >/dev/null
+    docker rm "$id" >/dev/null
+}
+cleanup_created() {
+    if [[ -n "$created_id" ]]; then
+        remove_owned "$created_id"
+    fi
+}
+start() {
+    created_id="$(docker create --init --user "$(id -u):$(id -g)" --name "$name" \
+        --label arp.demo=java-dictionary --label "arp.demo.owner=$root" \
+        --publish "127.0.0.1:$port:8080" --env "ARP_DEMO_ORIGIN=$origin" \
+        --env ARP_CONTRACT_PATH=/contract \
+        --mount "type=bind,src=$contract,dst=/contract,readonly" "$image")" || return
+    docker start "$created_id"
+}
+case "${1:-}" in
+    build)
+        tar -C "$root" -cf - \
+            pom.xml contract.ref src demo/Dockerfile demo/DictionaryHost.java \
+            | docker build -t "$image" -f demo/Dockerfile -
+        ;;
+    start)
+        trap cleanup_created EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
+        start
+        trap - EXIT INT TERM
+        ;;
+    stop)
+        if id="$(docker container inspect --format '{{.Id}}' "$name" 2>/dev/null)"; then
+            remove_owned "$id"
+        fi
+        ;;
+    test-library)
+        pin="${ARP_CONFORMANCE_PATH:?Set ARP_CONFORMANCE_PATH to a clean checkout at contract.ref}"
+        docker run --rm --init --env ARP_CONTRACT_PATH=/contract \
+            --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory \
+            --env GIT_CONFIG_VALUE_0=/contract \
+            --mount "type=bind,src=$pin,dst=/contract,readonly" "$image" \
+            mvn -B -Darp.contract.path=/contract clean verify
+        ;;
+    check)
+        "$0" build
+        "$0" test-library
+        trap cleanup_created EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
+        start
+        [[ "$(docker port "$created_id" 8080/tcp)" == "127.0.0.1:$port" ]]
+        ARP_DEMO_RUNTIME=java ARP_DEMO_URL="http://127.0.0.1:$port" ARP_DEMO_ORIGIN="$origin" \
+            ARP_CONTRACT_PATH="$contract" python3 "$root/demo/check-http.py"
+        ;;
+    *) echo 'Usage: demo/run {build|start|stop|test-library|check}' >&2; exit 2 ;;
+esac
