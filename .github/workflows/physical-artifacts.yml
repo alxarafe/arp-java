@@ -1,0 +1,17 @@
+name: Physical artifact policy
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  physical-artifact-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Audit tools and regression tests
+        run: |
+          python3 -m venv "$RUNNER_TEMP/arp-physical-audit"
+          "$RUNNER_TEMP/arp-physical-audit/bin/pip" install -r providers/requirements-audit.txt
+          "$RUNNER_TEMP/arp-physical-audit/bin/python" providers/tests/test_generated_physical_guard.py
+          "$RUNNER_TEMP/arp-physical-audit/bin/python" providers/check-generated-physical.py --tree HEAD

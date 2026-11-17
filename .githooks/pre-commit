@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+exec "${ARP_AUDIT_PYTHON:-python3}" providers/check-generated-physical.py --index

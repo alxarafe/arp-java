@@ -37,3 +37,14 @@ target/
 .env
 .env.*
 !.env.example
+
+# Runtime-generated physical descriptors belong outside versioned source.
+*.physical.yaml
+*.physical.yml
+*.physical.json
+
+# Python audit-tool caches.
+__pycache__/
+
+# Application runtime cache; never version declarative storage output.
+cache/
