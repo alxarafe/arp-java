@@ -34,7 +34,7 @@ sin driver obligatorio en el artefacto puro.
 | Descriptor procedente de introspección real | Implementado, proveedor existente reutilizado |
 | YAML físico determinista `arp.physical/v1` | Implementado, YAML 1.2 flow aceptado por el parser CDS existente |
 | Recuperación semántica exacta y validación de esquema/identidad | Verificada antes de publicar |
-| Almacén externo configurable, separado por ámbitos/conexiones/objetos | Implementado, claves opacas sin DSN |
+| Caché local ignorada o externa, separada por identidad | Implementado, claves opacas sin DSN |
 | Escritura temporal, flush y sustitución atómica local | Implementada; no se recurre a una copia no atómica |
 | Invalidación durable y bloqueo ante fallo de invalidación | Verificados con errores reales de permisos |
 | Recuperación entre procesos y contenedores | Verificada con mismo volumen y cero introspecciones |
@@ -42,8 +42,9 @@ sin driver obligatorio en el artefacto puro.
 
 `PersistedPhysicalProvider` decora al proveedor nativo; no duplica SQL ni reglas escalares. `PhysicalYaml`,
 `FilePhysicalStore` y `PhysicalStoreKey` viven en el adaptador opcional. La biblioteca pura no cambia ni requiere
-almacenamiento. El anfitrión elige una raíz existente, absoluta y externa, y declara sus raíces de código fuente.
-No se impone jerarquía de carpetas. Hashes de ámbito, conexión y objeto impiden colisiones de nombres/literales;
+almacenamiento. El anfitrión elige una raíz de caché existente y absoluta, y declara sus raíces de código fuente.
+La convención de aplicación es `cache/arp/physical/`; no se impone al núcleo puro.
+Hashes de ámbito, conexión y objeto impiden colisiones de nombres/literales;
 las credenciales nunca son claves ni datos serializados. Los tipos nativos y los enteros exactos se conservan.
 
 La lectura exige estado válido, checksum, identidad y esquema correctos. La invalidación cambia el token local
@@ -109,14 +110,14 @@ objetos ausentes/vistas/sentinel, fallo del segundo proveedor y estrechamiento i
 
 454 pruebas JUnit correctas con el perfil (451 previas, dos métodos de integración y un método de persistencia),
 más una prueba de recuperación en otro contenedor. Ejecutan los cinco escenarios contractuales, nueve grupos
-adicionales y los 15 grupos de persistencia. 12 pruebas del control Git correctas.
+adicionales y los 16 grupos de persistencia. 12 pruebas del control Git correctas.
 
 Los informes registran `preexistingContainersPreserved`, `logicalYamlUnchanged` y
 `testLogPersistsAfterContainerRemoval`. La eliminación usa solo IDs creados por la prueba y su etiqueta única,
 rechaza contenedores preexistentes, no publica puertos ni utiliza bases de datos de aplicaciones ajenas.
 La comparación antes/después conserva IDs, estado, inicio y contador de reinicios de los contenedores ajenos.
 No quedan contenedores/redes de los runs. La imagen de tests PHP es una caché local reutilizable.
-Además se verifican 15 grupos de persistencia y una recuperación real en un segundo proceso/contenedor: mismo
+Además se verifican 16 grupos de persistencia y una recuperación real en un segundo proceso/contenedor: mismo
 volumen y checksum, cero introspecciones. Incluyen corrupción, permisos de lectura/escritura, escritura fallida,
 fallo nativo tras invalidar, separación de identidades, invalidación fallida/durante generación, rutas y secretos.
 Los informes añaden `physicalYamlRecoveredAfterContainerRecreation`, `recoveryWithoutIntrospection`,
@@ -134,3 +135,15 @@ contractuales, releases, etiquetas ni publicaciones. Los YAML físicos de prueba
 
 Comprobación adicional de la referencia, solo lectura: 106 pruebas Python y los seis verificadores contractuales
 correctos. Evidencia estática/pura separada de las pruebas nativas con BD real.
+
+## Ajuste de ubicación de caché
+
+Se admite `cache/arp/physical/` dentro de una aplicación Git con `cache/` ignorada, además del almacén externo.
+Git comprueba exclusión efectiva y ausencia de entradas en el índice en cada acceso al almacén. Una raíz de caché
+alternativa se autoriza mediante el tercer argumento opcional; ignorar una carpeta de definiciones no la autoriza.
+Se rechazan raíz fuente, enlaces, escapes de la raíz autorizada, exclusión revocada y caché incorporada con `add -f`.
+Las 12 regresiones de hook/índice/árbol y la CI siguen bloqueando la incorporación de YAML físicos generados.
+El grupo adicional comprueba aplicación Git ignorada/no ignorada, definiciones ignoradas, autorización alternativa,
+reapertura, invalidación/regeneración, enlaces, revocación de exclusión e incorporación forzada al índice.
+Persistencia externa entre dos contenedores permanece cubierta por las fases seed/recover del runner.
+No se modifica el núcleo, el contrato ni se incorpora ARP-CACHE-001.

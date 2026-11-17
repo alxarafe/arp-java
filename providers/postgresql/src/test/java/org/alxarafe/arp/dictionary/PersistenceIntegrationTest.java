@@ -174,8 +174,54 @@ class PersistenceIntegrationTest
             assertTrue(new String(PhysicalYaml.encode(exact, key), java.nio.charset.StandardCharsets.UTF_8)
                     .contains("9223372036854775807"));
             groups.add("exact-integer-codec");
+            applicationCache(doc, key); groups.add("git-ignored-application-cache");
             Files.writeString(directory.resolve("proof.json"), digest(Files.readAllBytes(path)));
             System.out.println("PERSISTENCE_SEED: " + JsonSupport.write(groups));
+        }
+    }
+    private static void git(Path repository, String... arguments) throws Exception
+    {
+        var command = new ArrayList<String>(List.of("git", "--literal-pathspecs", "-C", repository.toString()));
+        command.addAll(List.of(arguments));
+        var process = new ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+        assertEquals(0, process.waitFor(), "test application Git");
+    }
+    private static void applicationCache(Map<String, Object> observation, PhysicalStoreKey key) throws Exception
+    {
+        Path app = Files.createTempDirectory("arp-cache-app-");
+        try {
+            Path cache = Files.createDirectories(app.resolve("cache/arp/physical"));
+            Path definitions = Files.createDirectories(app.resolve("arp/models"));
+            Path custom = Files.createDirectory(app.resolve("custom-cache"));
+            git(app, "init", "--quiet");
+            assertThrows(ObservationException.class, () -> new FilePhysicalStore(cache, List.of(app)));
+            Files.writeString(app.resolve(".gitignore"), "cache/\narp/models/\ncustom-cache/\n");
+            var store = new FilePhysicalStore(cache, List.of(app));
+            var count = new java.util.concurrent.atomic.AtomicInteger();
+            FilePhysicalStore.Observe observe = () -> { count.incrementAndGet(); return observation; };
+            store.get(key, observe);
+            new FilePhysicalStore(cache, List.of(app)).get(key, observe);
+            assertEquals(1, count.get()); store.invalidate(key); store.get(key, observe);
+            assertEquals(2, count.get(), "local invalidation and regeneration");
+            assertThrows(ObservationException.class, () -> new FilePhysicalStore(definitions, List.of(app)));
+            assertThrows(ObservationException.class, () -> new FilePhysicalStore(custom, List.of(app)));
+            new FilePhysicalStore(custom, List.of(app), List.of(custom)).get(key, observe);
+            assertThrows(ObservationException.class,
+                    () -> new FilePhysicalStore(cache, List.of(app), List.of(custom)));
+            Path link = app.resolve("linked-cache"); Files.createSymbolicLink(link, cache);
+            assertThrows(ObservationException.class, () -> new FilePhysicalStore(link, List.of(app)));
+            Files.delete(link);
+            Files.writeString(app.resolve(".gitignore"), "");
+            assertThrows(ObservationException.class, () -> store.get(key, observe));
+            Files.writeString(app.resolve(".gitignore"), "cache/\n");
+            git(app, "add", "-f", "--", store.fileFor(key).toString());
+            assertThrows(ObservationException.class, () -> store.get(key, observe));
+        } finally {
+            // Only the disposable application created by this test.
+            try (var paths = Files.walk(app)) {
+                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) Files.delete(path);
+            }
         }
     }
     private static String digest(byte[] bytes) throws Exception

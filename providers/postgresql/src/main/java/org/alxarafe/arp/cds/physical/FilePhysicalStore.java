@@ -19,13 +19,27 @@ public final class FilePhysicalStore
     private record State(String generation, String key, String digest, boolean valid) { }
     private final Path root;
     private final List<Path> sources;
+    private final List<Path> cacheRoots;
     private final ObjectMapper json = new ObjectMapper();
 
     public FilePhysicalStore(Path directory, List<Path> versionedSourceRoots) throws ObservationException
     {
+        this(directory, versionedSourceRoots, List.of());
+    }
+    public FilePhysicalStore(Path directory, List<Path> versionedSourceRoots, List<Path> authorizedCacheRoots)
+            throws ObservationException
+    {
         try {
             if (!directory.isAbsolute() || versionedSourceRoots.isEmpty()) throw new ObservationException();
             root = directory.toRealPath();
+            if (!directory.normalize().equals(root)) throw new ObservationException();
+            var caches = new java.util.ArrayList<Path>();
+            for (Path p : authorizedCacheRoots) {
+                Path real = p.toRealPath();
+                if (!p.isAbsolute() || !p.normalize().equals(real)) throw new ObservationException();
+                caches.add(real);
+            }
+            cacheRoots = List.copyOf(caches);
             sources = versionedSourceRoots.stream().map(p -> {
                 try { return p.toRealPath(); } catch (IOException e) { throw new IllegalArgumentException(e); }
             }).toList();
@@ -122,16 +136,40 @@ public final class FilePhysicalStore
     {
         if (Files.isSymbolicLink(path) || Files.isDirectory(path)) throw new ObservationException();
     }
+    private static int git(Path repository, String... arguments) throws IOException, ObservationException
+    {
+        var command = new java.util.ArrayList<String>(List.of("git", "-C",
+                repository.toString()));
+        command.addAll(List.of(arguments));
+        var process = new ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+        try {
+            if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly(); throw new ObservationException();
+            }
+            return process.exitValue();
+        } catch (InterruptedException e) {
+            process.destroyForcibly(); Thread.currentThread().interrupt(); throw new ObservationException();
+        }
+    }
     private void checkRoot() throws IOException, ObservationException
     {
-        if (!root.toRealPath().equals(root) || sources.stream().anyMatch(root::startsWith)) {
-            throw new ObservationException();
-        }
+        if (!root.toRealPath().equals(root) || sources.contains(root)) throw new ObservationException();
+        Path repository = null;
         for (Path p = root; p != null; p = p.getParent()) {
-            if (Files.exists(p.resolve(".git"))
-                    || Files.exists(p.resolve("HEAD")) && Files.isDirectory(p.resolve("objects"))) {
+            if (Files.exists(p.resolve("HEAD")) && Files.isDirectory(p.resolve("objects"))) {
                 throw new ObservationException();
             }
+            if (Files.exists(p.resolve(".git"))) { repository = p; break; }
+        }
+        var authorized = cacheRoots.isEmpty() && repository != null
+                ? List.of(repository.resolve("cache/arp/physical")) : cacheRoots;
+        if (sources.stream().anyMatch(root::startsWith) || repository != null || !cacheRoots.isEmpty()) {
+            if (authorized.stream().noneMatch(root::startsWith)) throw new ObservationException();
+        }
+        if (repository != null && (git(repository, "check-ignore", "--quiet", "--no-index", "--", root + "/") != 0
+                || git(repository, "--literal-pathspecs", "ls-files", "--error-unmatch", "--", root + "/") != 1)) {
+            throw new ObservationException();
         }
     }
 }

@@ -167,12 +167,23 @@ The existing native observer remains the sole metadata authority. `PersistedPhys
 `FilePhysicalStore` and `PhysicalStoreKey` are optional provider-layer APIs. Pure dictionary/resolver consumers
 need no directory, database, driver or filesystem store. No dependency or normative schema is added.
 
-The host creates an **existing absolute directory outside all versioned source trees**, then passes that directory
-and its versioned source roots to the store. Source roots are mandatory even when a container copy omits `.git`.
-Real paths/symlink ancestors are resolved; Git worktrees/bare repositories, declared source subtrees and symlink
-or directory artifact targets are rejected. The directory must belong to the application and contain no secrets
-in its name. No application folder hierarchy is prescribed: the implementation uses opaque hashed filenames
-inside whichever root the host supplies. Do not choose a source directory just because it is ignored by Git.
+The host creates an **existing absolute cache directory**, then passes that directory and its versioned source
+roots to the optional store. The application convention is `cache/arp/physical/`, inside the application or on an
+external persistent volume. The pure ARP core has no default path or filesystem dependency.
+
+Within a Git checkout, the conventional directory is authorized as cache, but Git must actually exclude it.
+The store runs `git check-ignore --no-index` and checks that the directory contains no index entries, on construction
+and each storage access. Missing Git, invalid repositories, revoked ignore rules or force-staged cache files fail
+closed. This uses Git's ignore rules, not a custom glob approximation. Ignore `cache/` in the application's
+`.gitignore`; ignoring only the `*.physical.yaml` suffix is insufficient because state/lock files also live there.
+
+The optional third constructor argument (`authorizedCacheRoots`) explicitly authorizes alternative existing cache
+roots, including an application-owned ignored directory under a declared source tree. When supplied, the selected
+directory must remain within one of those roots. An ignored definitions directory is not implicitly authorized.
+Without a Git checkout, source subtrees still require explicit cache authorization; an external directory outside
+source trees continues to work with the original two arguments. Git metadata/bare repositories, source roots
+themselves, symlink cache paths, escaped authorized paths and symlink/directory artifact targets are rejected.
+Paths must be owner-controlled and contain no credentials. Artifacts still use opaque hashes only.
 
 `PhysicalStoreKey(application, connection, provider, physicalId, dialect, schema, table)` separates application
 scope, stable connection alias, provider registration and literal engine/schema/table identities. Aliases are
@@ -240,7 +251,7 @@ and 15 additional persistence groups, **destroys the seed runner**, then creates
 same volume. Recovery asserts the same YAML checksum and **zero native introspections**. Database test state remains
 in the owned DB container during this specific runner-recreation test; this is not a daemon/host-crash exercise.
 
-The 15 groups cover lazy generation/cache/reopen, deterministic semantic roundtrip against actual introspection,
+The 16 groups cover lazy generation/cache/reopen, deterministic semantic roundtrip against actual introspection,
 application/connection/schema/table isolation, DDL regeneration without public exposure expansion, corrupt/truncated
 and schema-valid edited YAML, state corruption, read permission recovery, failed native regeneration without stale
 fallback, write permission recovery, failed target replacement, failed invalidation with a blocked catalog,
@@ -301,8 +312,9 @@ YAML and its storage state. The host configures the physical directory; no path 
 The dictionary-only demos currently load unchanged contract fixtures read-only and do not own CDS definitions
 or physical storage, so those fixtures are not moved or duplicated into application directories.
 
-For the optional persisted provider, deploy/mount `cache/arp/physical/` outside the versioned source checkout
-and pass its existing absolute path as the host physical directory. The current store deliberately rejects
-locations inside a Git/source tree, including ignored directories. A deployment root or external volume can
-provide this application layout while keeping authored definitions and generated storage separate.
-The integration runner's `/physical-store` mount is an external configurable test volume, not a core path rule.
+The optional persisted provider accepts `cache/arp/physical/` inside the application's Git checkout when
+`cache/` is ignored, or an external directory/volume configured by the host. Other cache roots require explicit
+authorization when they overlap declared source trees or a checkout. Declarative directories remain protected.
+The integration runner's `/physical-store` mount exercises the external mode. Its disposable Git application
+also exercises ignored local cache, reopen, invalidation/regeneration, revoked ignores, forced staging and paths.
+No application folder layout is imposed on pure ARP consumers.
