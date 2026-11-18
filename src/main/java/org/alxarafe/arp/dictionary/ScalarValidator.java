@@ -58,6 +58,12 @@ final class ScalarValidator {
         }
     }
 
+    /** Storage reads check only the scalar codec/type range, never current editing constraints. */
+    public static ValidationResult read(ScalarType type, Object value)
+    {
+        return validate(new Descriptor("stored", type, java.util.Map.of(), java.util.List.of(), null, null, null), value);
+    }
+
     private static void fail(ArrayList<Issue> issues, String id, String constraint) {
         issues.add(new Issue(Code.DICTIONARY_VALUE_CONSTRAINT, id, constraint, null));
     }

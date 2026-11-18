@@ -61,6 +61,20 @@ public final class PhysicalCatalog
         return publication.current();
     }
 
+    public synchronized long generation()
+    {
+        return publication.generation();
+    }
+
+    /** The caller must coordinate host policy changes using its own publication gate. */
+    public synchronized <T> T publishRead(CdsReadResult expected, java.util.function.Supplier<T> publish)
+    {
+        if (expected == null || publication.current().orElse(null) != expected) {
+            throw new IllegalStateException("Read generation changed");
+        }
+        return publish.get();
+    }
+
     public CdsReadResult resolve()
     {
         synchronized (resolveGate) {

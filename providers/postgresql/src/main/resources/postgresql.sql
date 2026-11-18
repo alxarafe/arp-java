@@ -18,7 +18,7 @@ WITH config AS (
             AND (ck.conkey IS NULL OR cardinality(ck.conkey) = 0 OR a.attnum = ANY(ck.conkey))) THEN CASE ty.typname
             WHEN 'int2' THEN 'INT16' WHEN 'int4' THEN 'INT32' WHEN 'int8' THEN 'INT64'
             WHEN 'varchar' THEN 'STRING' WHEN 'bpchar' THEN 'STRING' WHEN 'text' THEN 'TEXT'
-            WHEN 'bool' THEN 'BOOLEAN' END END,
+            WHEN 'bool' THEN 'BOOLEAN' WHEN 'numeric' THEN 'DECIMAL' WHEN 'date' THEN 'DATE' END END,
         'integerRange', CASE WHEN ns.nspname = 'pg_catalog' AND NOT EXISTS (
             SELECT 1 FROM pg_catalog.pg_constraint ck WHERE ck.conrelid = t.oid AND ck.contype = 'c'
             AND (ck.conkey IS NULL OR cardinality(ck.conkey) = 0 OR a.attnum = ANY(ck.conkey))) THEN CASE ty.typname

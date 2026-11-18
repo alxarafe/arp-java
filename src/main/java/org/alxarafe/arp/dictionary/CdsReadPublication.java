@@ -7,6 +7,10 @@ public final class CdsReadPublication
 {
     private long generation;
     private CdsReadResult current;
+    public synchronized long generation()
+    {
+        return generation;
+    }
     public synchronized long beginGeneration()
     {
         current = null;
