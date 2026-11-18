@@ -38,6 +38,7 @@ def main():
     p.add_argument('--contract', type=Path, required=True, help='Clean exact contract checkout')
     p.add_argument('--output', type=Path, required=True, help='Reports outside the source repository')
     p.add_argument('--php-image', default='arp-cds-read-003-php-test:local')
+    p.add_argument('--listget-contract', type=Path, help='Exact LISTGET contract checkout')
     options = p.parse_args()
     # This script lives under providers/ in every runtime repository.
     source = Path(__file__).resolve().parents[1]
@@ -45,8 +46,14 @@ def main():
     assert run('git', '-C', str(contract), 'rev-parse', 'HEAD').stdout.strip() == REF, 'Wrong contract revision'
     assert not run('git', '-C', str(contract), 'status', '--porcelain').stdout.strip(), 'Dirty contract'
     assert (source / 'contract.ref').read_text().strip() == REF, 'Wrong runtime pin'
+    if options.listget_contract:
+        expected = (source / 'listget-contract.ref').read_text().strip()
+        actual = run('git', '-C', str(options.listget_contract), 'rev-parse', 'HEAD').stdout.strip()
+        assert actual == expected, 'Wrong LISTGET contract revision'
+        assert not run('git', '-C', str(options.listget_contract), 'status', '--porcelain').stdout.strip()
     output = options.output.resolve()
     assert not output.is_relative_to(source), 'Reports must be outside source tree'
+    assert output.is_relative_to(Path.home() / 'Desarrollo/tmp'), 'Use ~/Desarrollo/tmp for auxiliary results'
     output.mkdir(parents=True, exist_ok=True)
     logical_sources = sorted((contract / 'examples/demo/cds').glob('*.yaml'))
     logical_hashes = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in logical_sources}
@@ -70,6 +77,9 @@ def main():
             args += ['-e', setting]
         db = docker(*args, IMAGES[engine])
         containers.append(db)
+        report['databaseImageId'] = json.loads(docker('inspect', db))[0]['Image']
+        if options.listget_contract:
+            report['listgetContractSha'] = expected
         docker('start', db)
         deadline = time.monotonic() + 100
         ready = (['pg_isready', '-U', 'arpcds', '-d', 'arpcds'] if engine == 'postgresql'
@@ -100,7 +110,7 @@ def main():
         docker('rm', setup)
         containers.remove(setup)
         report['physicalStoreVolume'] = volume
-        with tempfile.TemporaryDirectory(prefix='arp-cds-003-build-') as temp:
+        with tempfile.TemporaryDirectory(prefix='arp-cds-003-build-', dir=output) as temp:
             work = Path(temp)
             shutil.copytree(source, work, dirs_exist_ok=True,
                             ignore=shutil.ignore_patterns('.git', 'bin', 'obj', 'target', 'vendor', 'artifacts',
@@ -142,6 +152,10 @@ def main():
                         '-e', 'COMPOSER_ROOT_VERSION=dev-integration', '-e', 'GIT_CONFIG_COUNT=1',
                         '-e', 'GIT_CONFIG_KEY_0=safe.directory', '-e', 'GIT_CONFIG_VALUE_0=/contract',
                         image, '-c', command]
+                if options.listget_contract:
+                    args[args.index(image):args.index(image)] = [
+                        '--mount', 'type=bind,src=' + str(options.listget_contract.resolve()) + ',dst=/listget,readonly',
+                        '-e', 'ARP_LISTGET_CONTRACT=/listget']
                 runner = docker(*args)
                 containers.append(runner)
                 runner_ids.append(runner)
@@ -153,6 +167,10 @@ def main():
                 phase_log = (result.stdout + '\n' + result.stderr).replace(password, '[redacted]')
                 log += '\nPHASE: ' + phase + '\n' + phase_log
                 (output / (STACK + '.log')).write_text(log)
+                if options.listget_contract:
+                    records = [json.loads(line.split('LISTGET_EVIDENCE:', 1)[1]) for line in log.splitlines()
+                               if line.startswith('LISTGET_EVIDENCE:')]
+                    (output / 'listget-responses.json').write_text(json.dumps(records, indent=2, ensure_ascii=False))
                 state = json.loads(docker('inspect', runner))[0]
                 if state['State']['ExitCode'] != 0:
                     raise RuntimeError('Tests failed; see ' + str(output / (STACK + '.log')))
