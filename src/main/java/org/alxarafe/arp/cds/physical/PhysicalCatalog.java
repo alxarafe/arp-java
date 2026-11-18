@@ -13,7 +13,7 @@ import org.alxarafe.arp.dictionary.CdsReadResolver;
 import org.alxarafe.arp.dictionary.CdsReadResult;
 
 /** Lazy local catalog; definition bytes are owned and observers run outside the publication lock. */
-public final class PhysicalCatalog
+public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCatalog
 {
     private final Object resolveGate = new Object();
     private final CdsReadPublication publication = new CdsReadPublication();

@@ -74,19 +74,42 @@ class ListGetIntegrationTest
         try { return method.invoke(target, args); }
         catch (InvocationTargetException e) { throw e.getCause(); }
     }
-    private static Connection monitored(Runnable afterQuery, AtomicBoolean offline) throws java.sql.SQLException
+    private static Connection monitored(Harness harness) throws java.sql.SQLException
     {
-        if (offline.get()) { throw new java.sql.SQLException("private connection details"); }
-        var c = connect();
+        if (harness.offline.get()) { throw new java.sql.SQLException("private connection details"); }
+        var connection = connect();
+        harness.openConnections.incrementAndGet();
+        var selected = new AtomicBoolean();
         return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]{Connection.class},
                 (proxy, method, args) -> {
-                    Object value = reflect(c, method, args);
-                    if (method.getName().equals("prepareStatement") && ((String) args[0]).contains(" FROM ONLY ")) {
+                    String name = method.getName();
+                    if (name.equals("commit") && selected.get()) {
+                        harness.commitAttempts++;
+                        if (harness.failCommit) { throw new java.sql.SQLException("private commit failure"); }
+                        Object result = reflect(connection, method, args);
+                        harness.afterCommit.run();
+                        return result;
+                    }
+                    if (name.equals("close")) {
+                        Object result = reflect(connection, method, args);
+                        harness.openConnections.decrementAndGet();
+                        if (selected.get() ? harness.failClose : harness.failGuardClose) {
+                            throw new java.sql.SQLException("private close failure");
+                        }
+                        return result;
+                    }
+                    if (name.equals("rollback") && !selected.get() && harness.failGuardRollback) {
+                        reflect(connection, method, args);
+                        throw new java.sql.SQLException("private mandatory guard rollback failure");
+                    }
+                    Object value = reflect(connection, method, args);
+                    if (name.equals("prepareStatement") && ((String) args[0]).contains(" FROM ONLY ")) {
+                        selected.set(true);
                         SQL.add((String) args[0]);
                         return Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
                                 new Class<?>[]{PreparedStatement.class}, (p, m, a) -> {
                                     Object result = reflect(value, m, a);
-                                    if (m.getName().equals("executeQuery")) { afterQuery.run(); }
+                                    if (m.getName().equals("executeQuery")) { harness.afterQuery.run(); }
                                     return result;
                                 });
                     }
@@ -105,6 +128,11 @@ class ListGetIntegrationTest
         final AtomicBoolean allowFields = new AtomicBoolean(true);
         final AtomicBoolean capability = new AtomicBoolean(true);
         Runnable afterQuery = () -> {};
+        Runnable afterCommit = () -> {};
+        boolean failCommit, failClose, failGuardRollback, failGuardClose;
+        int commitAttempts;
+        final java.util.concurrent.atomic.AtomicInteger openConnections =
+                new java.util.concurrent.atomic.AtomicInteger();
         Runnable onAuthorize = () -> {};
         final java.util.concurrent.atomic.AtomicReference<String> currentPolicy =
                 new java.util.concurrent.atomic.AtomicReference<>();
@@ -129,6 +157,10 @@ class ListGetIntegrationTest
             this(name, narrowRating, null);
         }
         Harness(String name, boolean narrowRating, JsonNode definitionOverride) throws Exception
+        {
+            this(name, narrowRating, definitionOverride, 5);
+        }
+        Harness(String name, boolean narrowRating, JsonNode definitionOverride, int timeoutSeconds) throws Exception
         {
             layout = products.at("/layouts/" + name);
             String pk = name.equals("composite") ? "tenant_id,product_id" : "product_id";
@@ -172,7 +204,7 @@ class ListGetIntegrationTest
             physical = new PhysicalCatalog(dictionary, definitions, Map.of("observed",
                     new PostgreSqlObservationProvider(ListGetIntegrationTest::connect, "commercial-db",
                             "storage.products", "commerce", "products", 5)));
-            var executor = new PostgreSqlReadExecutor(() -> monitored(() -> afterQuery.run(), offline));
+            var executor = new PostgreSqlRecordReader(() -> monitored(this), timeoutSeconds);
             host = new ListGetHost(physical, executor,
                     ACTIVE, (target, operation, context) -> {
                         onAuthorize.run();
@@ -597,6 +629,132 @@ class ListGetIntegrationTest
                     + "ALTER TABLE commerce.products ALTER COLUMN product_id TYPE smallint");
             h.physical.invalidate();
             error(h.call("catalog", "LIST", Map.of()), "INCOMPATIBLE_STORAGE"); assertTrue(SQL.isEmpty());
+        }));
+        return tests;
+    }
+
+    @TestFactory
+    List<DynamicTest> publicationLifecycle()
+    {
+        var tests = new ArrayList<DynamicTest>();
+        for (String layout : List.of("simple", "composite")) {
+            tests.add(DynamicTest.dynamicTest(layout + " DDL remains blocked after DATA commit", () -> {
+                var h = new Harness(layout);
+                var blocked = new java.util.concurrent.atomic.AtomicInteger();
+                h.afterCommit = () -> {
+                    try (var c = connect(); var statement = c.createStatement()) {
+                        statement.execute("SET lock_timeout='150ms'");
+                        var error = assertThrows(java.sql.SQLException.class, () -> statement.execute(
+                                "ALTER TABLE commerce.products ADD COLUMN publication_gap text"));
+                        assertEquals("55P03", error.getSQLState());
+                        blocked.incrementAndGet();
+                    } catch (java.sql.SQLException error) { throw new AssertionError(error); }
+                };
+                ok(h.call("catalog", "LIST", Map.of()));
+                ok(h.call("identified", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0)))));
+                h.tenant.set("999");
+                ok(h.call("catalog", "LIST", Map.of()));
+                assertEquals(3, blocked.get(), "LIST/GET/empty SQL page keep publication guard");
+                assertEquals(0, h.openConnections.get(), "all owned connections closed");
+                h.afterCommit = () -> {};
+                exec("ALTER TABLE commerce.products ADD COLUMN publication_gap text");
+                h.physical.invalidate();
+                h.tenant.set("7");
+                ok(h.call("catalog", "LIST", Map.of()));
+            }));
+            tests.add(DynamicTest.dynamicTest(layout + " mandatory commit and close failures discard output", () -> {
+                var h = new Harness(layout);
+                h.failCommit = true;
+                error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
+                error(h.call("identified", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0)))),
+                        "READ_FAILED");
+                h.tenant.set("999");
+                error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
+                assertEquals(3, h.commitAttempts);
+                assertEquals(0, h.openConnections.get());
+                h.failCommit = false;
+                h.tenant.set("7");
+                ok(h.call("catalog", "LIST", Map.of()));
+                h.failClose = true;
+                error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
+                assertEquals(0, h.openConnections.get());
+                h.failClose = false;
+                h.afterCommit = () -> h.failGuardRollback = true;
+                error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
+                assertEquals(0, h.openConnections.get());
+                h.failGuardRollback = false;
+                h.afterCommit = () -> h.failGuardClose = true;
+                error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
+                assertEquals(0, h.openConnections.get());
+                h.failGuardClose = false;
+                h.afterCommit = () -> h.physical.invalidate();
+                error(h.call("catalog", "LIST", Map.of()), "GENERATION_CHANGED");
+                h.afterCommit = () -> h.host.changeAccess(ACTIVE, () -> h.allowList.set(false));
+                error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
+                h.afterCommit = () -> {};
+                h.allowList.set(true);
+                ok(h.call("catalog", "LIST", Map.of()));
+                assertEquals(0, h.openConnections.get());
+            }));
+        }
+        tests.add(DynamicTest.dynamicTest("queued DDL guard handoff fails safely", () -> {
+            var h = new Harness("composite", false, null, 1);
+            var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+            var pending = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Future<?>>();
+            h.afterQuery = () -> {
+                pending.set(executor.submit(() -> {
+                    try { exec("SET lock_timeout='5s'; /*ARP_SQL_JAVA_QUEUED*/ "
+                            + "ALTER TABLE commerce.products ADD COLUMN queued_change text"); }
+                    catch (Exception error) { throw new RuntimeException(error); }
+                }));
+                try (var c = connect(); var statement = c.createStatement()) {
+                    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                    boolean queued = false;
+                    while (!queued && System.nanoTime() < deadline) {
+                        try (var rows = statement.executeQuery("SELECT EXISTS(SELECT 1 FROM pg_stat_activity "
+                                + "WHERE query LIKE '%ARP_SQL_JAVA_QUEUED%' AND wait_event_type='Lock')")) {
+                            assertTrue(rows.next());
+                            queued = rows.getBoolean(1);
+                        }
+                        if (!queued) { Thread.sleep(20); }
+                    }
+                    assertTrue(queued, "actual external DDL queued before guard handoff");
+                } catch (Exception error) { throw new RuntimeException(error); }
+            };
+            try {
+                error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
+                pending.get().get(5, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(0, h.openConnections.get());
+                h.afterQuery = () -> {};
+                h.physical.invalidate();
+                ok(h.call("catalog", "LIST", Map.of()));
+            } finally {
+                executor.shutdownNow();
+                assertTrue(executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS));
+            }
+        }));
+        tests.add(DynamicTest.dynamicTest("inherited reader keeps fixed common pipeline", () -> {
+            var h = new Harness("simple");
+            class InheritedReader extends PostgreSqlRecordReader
+            {
+                InheritedReader() { super(ListGetIntegrationTest::connect); }
+            }
+            assertEquals(SqlRecordReader.class, PostgreSqlRecordReader.class.getSuperclass());
+            assertTrue(java.lang.reflect.Modifier.isFinal(SqlRecordReader.class.getMethod("open",
+                    ReadPlan.class, java.util.function.BooleanSupplier.class).getModifiers()));
+            assertTrue(java.lang.reflect.Modifier.isFinal(SqlRecordReader.class.getMethod("prepare",
+                    CdsReadResult.class, String.class, Map.class).getModifiers()));
+            var reader = new InheritedReader();
+            var prepared = reader.prepare(h.physical.current().orElseThrow(), "products.catalog",
+                    Map.of("tenant_id", "7"));
+            try (var attempt = reader.open(new ReadPlan(prepared, null, false, 2), () -> true)) {
+                assertEquals(3, attempt.rows().size());
+                assertEquals("7.95", attempt.rows().getFirst().values().get("price"));
+                attempt.complete();
+                assertThrows(ReadFailure.class, attempt::complete);
+            }
+            var foreign = new PostgreSqlRecordReader(ListGetIntegrationTest::connect);
+            assertThrows(ReadFailure.class, () -> foreign.open(new ReadPlan(prepared, null, false, 2), () -> true));
         }));
         return tests;
     }

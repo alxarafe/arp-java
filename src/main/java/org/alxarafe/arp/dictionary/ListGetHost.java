@@ -12,14 +12,13 @@ import java.util.Set;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import org.alxarafe.arp.cds.physical.PhysicalCatalog;
 
 /** Application-owned active registry and authorization boundary, independent of JDBC execution. */
 public final class ListGetHost
 {
     /** Binding includes principal/tenant and policy revision; the caller supplies it, never the request. */
     public record Context(String identity, String policyRevision) {}
-    /** Complete field grant plus SQL equality restrictions; null means an unsupported policy, not unrestricted. */
+    /** Complete field grant plus equality restrictions; null means an unsupported policy, not unrestricted. */
     public record Access(boolean allowed, Set<String> fields, Map<String, Object> equalities)
     {
         public Access
@@ -48,8 +47,8 @@ public final class ListGetHost
         final String code;
         Fault(String code) { this.code = code; }
     }
-    private final PhysicalCatalog catalog;
-    private final PostgreSqlReadExecutor executor;
+    private final ReadCatalog catalog;
+    private final RecordReader reader;
     private final Authorizer authorizer;
     private final Object gate = new Object();
     private Map<String, Target> active;
@@ -58,11 +57,11 @@ public final class ListGetHost
     private final byte[] secret = new byte[32];
     private final ObjectMapper json = JsonSupport.reader(new Limits(1_048_576, 2048, 64));
 
-    public ListGetHost(PhysicalCatalog catalog, PostgreSqlReadExecutor executor,
+    public ListGetHost(ReadCatalog catalog, RecordReader reader,
                        Map<String, Target> active, Authorizer authorizer)
     {
         this.catalog = catalog;
-        this.executor = executor;
+        this.reader = reader;
         this.active = Map.copyOf(active);
         this.authorizer = authorizer;
         random.nextBytes(secret);
@@ -95,11 +94,6 @@ public final class ListGetHost
     {
         return objects(list).stream().filter(v -> id.equals(v.get("id"))).findFirst()
                 .orElseThrow(() -> new Fault("CAPABILITY_UNAVAILABLE"));
-    }
-    private static ScalarType type(Map<String, Object> field)
-    {
-        try { return ScalarType.valueOf((String) field.get("type")); }
-        catch (RuntimeException e) { throw new Fault("CAPABILITY_UNAVAILABLE"); }
     }
     private Access access(String target, String operation, Context context, List<String> fields)
     {
@@ -149,56 +143,12 @@ public final class ListGetHost
             need(registration.fields().equals(Set.copyOf(fieldNames)), "INVALID_DEFINITION");
             need(initial.fields().containsAll(fieldNames), "UNAVAILABLE");
             need(initial.equalities() != null, "CAPABILITY_UNAVAILABLE");
-            var model = find(snapshot.projection().get("models"), (String) projection.get("entity"));
-            var physical = map(model.get("physical"));
-            need("table".equals(physical.get("kind")), "CAPABILITY_UNAVAILABLE");
-            var modelFields = objects(model.get("fields"));
-            var columns = new LinkedHashMap<String, Map<String, Object>>();
-            modelFields.forEach(f -> columns.put((String) f.get("name"), f));
-            @SuppressWarnings("unchecked") var keys = (List<String>) physical.get("primaryKey");
-            need(keys != null && !keys.isEmpty() && keys.size() <= 7, "CAPABILITY_UNAVAILABLE");
-            var keyTypes = new ArrayList<ScalarType>();
-            for (String key : keys) {
-                var f = columns.get(key);
-                ScalarType t = type(f);
-                var keyPhysical = map(f.get("physical"));
-                need(t.integer() && keyPhysical.get("scalarType") instanceof String nativeKey
-                        && ScalarType.valueOf(nativeKey).integer()
-                        && Boolean.FALSE.equals(keyPhysical.get("nullable")),
-                        "CAPABILITY_UNAVAILABLE");
-                keyTypes.add(t);
-            }
-            var selected = new ArrayList<PostgreSqlReadExecutor.Column>();
-            for (var f : fields) {
-                String name = (String) f.get("name");
-                var stored = map(columns.get(name).get("physical"));
-                ScalarType t = type(f);
-                need(Set.of(ScalarType.INT8, ScalarType.UINT8, ScalarType.INT16, ScalarType.UINT16,
-                        ScalarType.INT32, ScalarType.UINT32, ScalarType.INT64, ScalarType.DECIMAL,
-                        ScalarType.STRING, ScalarType.TEXT, ScalarType.BOOLEAN, ScalarType.DATE).contains(t)
-                        && stored.containsKey("nullable") && stored.containsKey("scalarType"),
-                        "CAPABILITY_UNAVAILABLE");
-                // PostgreSQL fixed CHAR has padding semantics outside the demonstrated lossless text profile.
-                need(!((String) stored.get("nativeType")).startsWith("character("), "CAPABILITY_UNAVAILABLE");
-                String nativeScalar = (String) stored.get("scalarType");
-                need(t.name().equals(nativeScalar) || t.integer() && ScalarType.valueOf(nativeScalar).integer(),
-                        "CAPABILITY_UNAVAILABLE");
-                selected.add(new PostgreSqlReadExecutor.Column(name, t, (boolean) stored.get("nullable")));
-            }
-            var restriction = new LinkedHashMap<String, Object>();
-            initial.equalities().forEach((name, value) -> {
-                need(columns.containsKey(name), "CAPABILITY_UNAVAILABLE");
-                ScalarType t = type(columns.get(name));
-                need(t.integer(), "CAPABILITY_UNAVAILABLE");
-                var normalized = ScalarValidator.read(t, value);
-                need(normalized.valid(), "CAPABILITY_UNAVAILABLE");
-                restriction.put(name, new BigDecimal((String) normalized.normalizedValue().orElseThrow()));
-            });
-            long generation;
-            synchronized (catalog) {
-                need(catalog.current().orElse(null) == snapshot, "GENERATION_CHANGED");
-                generation = catalog.generation();
-            }
+            var prepared = reader.prepare(snapshot, registration.projection(), initial.equalities());
+            var keys = prepared.keys().stream().map(ReadPlan.Column::name).toList();
+            var keyTypes = prepared.keys().stream().map(ReadPlan.Column::type).toList();
+            // Seven signed integer components fit the unchanged contractual 128-character token budget.
+            need(!keys.isEmpty() && keys.size() <= 7, "CAPABILITY_UNAVAILABLE");
+            long generation = catalog.publishRead(snapshot, catalog::generation);
             var binding = Map.<String, Object>of("target", target, "projection", registration.projection(),
                     "identity", context.identity(), "policy", context.policyRevision(),
                     "accessEpoch", Long.toString(epoch), "generation", Long.toString(generation));
@@ -254,7 +204,8 @@ public final class ListGetHost
                 }
             }
             final int effectiveLimit = limit;
-            java.util.function.Function<List<PostgreSqlReadExecutor.Row>, Map<String, Object>> publish = rows -> {
+            java.util.function.BiFunction<List<ReadPlan.Row>, ReadAttempt, Map<String, Object>> publish =
+                    (rows, attempt) -> {
                 // Validate even internal/hidden PKs before any row or token may escape.
                 for (var row : rows) {
                     for (int i = 0; i < keys.size(); i++) {
@@ -267,19 +218,30 @@ public final class ListGetHost
                     need(initial.equals(finalAccess), "UNAVAILABLE");
                     need(policyGeneration == epoch, "GENERATION_CHANGED");
                     return catalog.publishRead(snapshot, () -> {
+                        Map<String, Object> response;
                         if (get) {
                             need(rows.size() <= 1, "ROW_IDENTITY_INVALID");
-                            return success(rows.isEmpty() ? Map.of("found", false)
+                            response = success(rows.isEmpty() ? Map.of("found", false)
                                     : Map.of("found", true, "record",
                                             record(rows.getFirst(), keys, keyTypes, opaque, binding)));
+                        } else {
+                            boolean more = rows.size() > effectiveLimit;
+                            var visible = rows.subList(0, Math.min(effectiveLimit, rows.size()));
+                            var records = visible.stream()
+                                    .map(r -> record(r, keys, keyTypes, opaque, binding)).toList();
+                            var page = new LinkedHashMap<String, Object>();
+                            page.put("limit", effectiveLimit); page.put("hasMore", more);
+                            page.put("next", more
+                                    ? seal(binding, "LIST", visible.getLast().key(), effectiveLimit) : null);
+                            response = success(Map.of("records", records, "page", page));
                         }
-                        boolean more = rows.size() > effectiveLimit;
-                        var visible = rows.subList(0, Math.min(effectiveLimit, rows.size()));
-                        var records = visible.stream().map(r -> record(r, keys, keyTypes, opaque, binding)).toList();
-                        var page = new LinkedHashMap<String, Object>();
-                        page.put("limit", effectiveLimit); page.put("hasMore", more);
-                        page.put("next", more ? seal(binding, "LIST", visible.getLast().key(), effectiveLimit) : null);
-                        return success(Map.of("records", records, "page", page));
+                        if (attempt != null) { attempt.complete(); }
+                        // Commit can reenter local policy/catalog mutation through a driver callback.
+                        need(registration.equals(active.get(target)), "GENERATION_CHANGED");
+                        need(initial.equals(access(target, operation, context, fieldNames)), "UNAVAILABLE");
+                        need(policyGeneration == epoch, "GENERATION_CHANGED");
+                        need(catalog.current().orElse(null) == snapshot, "GENERATION_CHANGED");
+                        return response;
                     });
                 }
             };
@@ -290,14 +252,16 @@ public final class ListGetHost
                             && catalog.current().orElse(null) == snapshot;
                 }
             };
-            return absent ? publish.apply(List.of()) : executor.read(new PostgreSqlReadExecutor.Plan(
-                    physical, selected, keys, restriction, position, get, limit), current, publish);
+            if (absent) { return publish.apply(List.of(), null); }
+            try (var attempt = reader.open(new ReadPlan(prepared, position, get, limit), current)) {
+                return publish.apply(attempt.rows(), attempt);
+            }
         } catch (Fault e) { return failure(e.code); }
-        catch (PostgreSqlReadExecutor.ReadFailure e) { return failure(e.code); }
+        catch (ReadFailure e) { return failure(e.code); }
         catch (IllegalStateException e) { return failure("GENERATION_CHANGED"); }
         catch (RuntimeException e) { return failure("READ_FAILED"); }
     }
-    private Map<String, Object> record(PostgreSqlReadExecutor.Row row, List<String> keys,
+    private Map<String, Object> record(ReadPlan.Row row, List<String> keys,
                                        List<ScalarType> types, boolean opaque, Map<String, Object> binding)
     {
         Object key;

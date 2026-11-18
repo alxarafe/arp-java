@@ -154,3 +154,16 @@ The pure resolver, generation publication API, exact shared scenarios and limits
 explicit invalidation, optional physical YAML persistence/recovery, isolated Docker tests and the minimal
 LIST/GET decisions still pending.
 The pure dictionary/CDS resolver remains usable without SQL, HTTP, ORM or the adapter driver.
+
+## Neutral LIST/GET core and optional SQL reader
+
+LIST/GET and the physical catalog are available in the ordinary artifact through
+storage-neutral ports. `SqlRecordReader` is a separate optional source layer,
+compiled with `-Psql-reader` without PostgreSQL. `-Ppostgresql-provider` includes
+that common layer, the PostgreSQL specialization and the explicit integration tests.
+Ordinary `mvn test` needs neither Docker nor a database and never downloads an engine.
+
+Applications now supply `new PostgreSqlRecordReader(connections)` to ListGetHost;
+the former PostgreSqlReadExecutor callback API is replaced by a protected read attempt
+with mandatory commit and close. See [the architecture and concurrency review](docs/sql-refactor-java-001.md)
+for class ownership, migration, tested combinations, the 88-vector matrix and limitations.
