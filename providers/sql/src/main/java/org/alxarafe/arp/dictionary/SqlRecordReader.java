@@ -153,6 +153,10 @@ public abstract class SqlRecordReader implements RecordReader
     {
         return quotedColumn;
     }
+    protected String valueExpression(String quotedColumn, ScalarType type)
+    {
+        return valueExpression(quotedColumn);
+    }
     protected String keyComparison(List<String> keys, boolean get, List<String> position, List<Object> parameters)
     {
         position.forEach(v -> parameters.add(new BigDecimal(v)));
@@ -212,10 +216,14 @@ public abstract class SqlRecordReader implements RecordReader
                     plan.get(), plan.position(), parameters));
         }
         String relation = quote(prepared.source.schema()) + "." + quote(prepared.source.table());
-        String sql = "SELECT " + String.join(",", names.stream().map(n -> valueExpression(quote(n))).toList())
+        String sql = "SELECT " + String.join(",", names.stream().map(n -> valueExpression(quote(n),
+                prepared.columns().stream().filter(c -> c.name().equals(n)).findFirst()
+                        .orElseGet(() -> prepared.keys().stream().filter(c -> c.name().equals(n)).findFirst()
+                                .orElseThrow()).type())).toList())
                 + " FROM " + fromModifier + relation
                 + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
-                + " ORDER BY " + String.join(",", prepared.keys().stream().map(k -> quote(k.name()) + " ASC").toList())
+                + " ORDER BY " + String.join(",", prepared.keys().stream()
+                        .map(k -> relation + "." + quote(k.name()) + " ASC").toList())
                 + limitClause();
         int take = plan.get() ? 2 : plan.limit() + 1;
         try (var statement = connection.prepareStatement(sql)) {
