@@ -167,3 +167,16 @@ Applications now supply `new PostgreSqlRecordReader(connections)` to ListGetHost
 the former PostgreSqlReadExecutor callback API is replaced by a protected read attempt
 with mandatory commit and close. See [the architecture and concurrency review](docs/sql-refactor-java-001.md)
 for class ownership, migration, tested combinations, the 88-vector matrix and limitations.
+
+## Additional SQL providers
+
+MySQL 8.4, MariaDB 12.3 and SQL Server 2022 use the same `SqlRecordReader` pipeline.
+Build individually with `-Pmysql-provider`, `-Pmariadb-provider` or `-Psqlserver-provider`.
+Drivers belong to optional tests; applications supply fresh JDBC connections and register
+matching readers and physical observers with the existing host/catalog.
+
+Run each engine explicitly with `providers/integration-sql-engines.py --engine ENGINE`,
+passing `--contract`, `--listget-contract` and an output directory under `~/Desarrollo/tmp`.
+Ordinary `mvn test` requires neither Docker nor a database.
+See [provider report](docs/sql-providers-java-002.md) for commands, measured guarantees,
+SQL Server writer blocking and unsupported capabilities.
