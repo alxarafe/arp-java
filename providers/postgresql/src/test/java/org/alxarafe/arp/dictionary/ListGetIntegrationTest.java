@@ -227,6 +227,31 @@ class ListGetIntegrationTest
     {
         var tests = new ArrayList<DynamicTest>();
         for (String layout : List.of("composite", "simple")) {
+            tests.add(DynamicTest.dynamicTest(layout + " GET reference length and invalid evidence", () -> {
+                var h = new Harness(layout);
+                var page = ok(h.call("catalog", "LIST", Map.of()));
+                String reference = page.at("/records/0/key/reference").asText();
+                for (String invalid : List.of("", "x".repeat(129))) {
+                    SQL.clear();
+                    var response = h.call("catalog", "GET", Map.of("key", Map.of("reference", invalid)));
+                    error(response, "INVALID_KEY");
+                    assertEquals("rejected", response.path("status").asText());
+                    assertEquals("invalid-data", response.at("/diagnostics/0/family").asText());
+                    assertTrue(SQL.isEmpty());
+                }
+                String tampered = (reference.startsWith("A") ? "B" : "A") + reference.substring(1);
+                for (String unknown : List.of("x", "x".repeat(128), "rec-unknown-unissued", tampered)) {
+                    SQL.clear();
+                    var output = ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", unknown))));
+                    assertEquals(ConformanceTest.JSON.readTree("{\"found\":false}"), output);
+                    assertTrue(SQL.isEmpty());
+                }
+                SQL.clear();
+                var output = ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", reference))));
+                assertTrue(output.path("found").asBoolean());
+                assertEquals(page.at("/records/0/values"), output.at("/record/values"));
+                assertEquals(1, SQL.size());
+            }));
             tests.add(DynamicTest.dynamicTest(layout + " products LIST/GET exact shared values and paging", () -> {
                 var h = new Harness(layout);
                 var seen = new ArrayList<JsonNode>();

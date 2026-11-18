@@ -214,7 +214,9 @@ public final class ListGetHost
                 if (opaque) {
                     need(key.keySet().equals(Set.of("reference")) && key.get("reference") instanceof String,
                             "INVALID_KEY");
-                    var decoded = open((String) key.get("reference"), binding, "GET");
+                    String reference = (String) key.get("reference");
+                    need(!reference.isEmpty() && reference.length() <= 128, "INVALID_KEY");
+                    var decoded = open(reference, binding, "GET");
                     if (decoded == null) { absent = true; }
                     else { position = tokenPosition(decoded); }
                 } else {
