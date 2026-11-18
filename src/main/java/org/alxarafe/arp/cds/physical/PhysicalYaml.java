@@ -17,7 +17,9 @@ public final class PhysicalYaml
 {
     private static final CdsReadResolver RESOLVER = new CdsReadResolver();
     private static final Catalog EMPTY = new CatalogBuilder().buildCatalog(List.of()).catalog().orElseThrow();
-    private static final ObjectMapper JSON = PostgreSqlObservationProvider.json();
+    private static final ObjectMapper JSON = new ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_INTEGER_FOR_INTS)
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     private PhysicalYaml() { }
 
     public static byte[] encode(Map<String, Object> document, PhysicalStoreKey key) throws ObservationException
