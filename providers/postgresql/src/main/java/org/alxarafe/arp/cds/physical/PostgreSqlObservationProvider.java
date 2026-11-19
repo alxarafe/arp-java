@@ -2,6 +2,7 @@ package org.alxarafe.arp.cds.physical;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -9,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Optional JDBC adapter. No PostgreSQL driver is a required dependency of the scalar/resolver artifact. */
+/**
+ * Optional JDBC adapter. No PostgreSQL driver is a required dependency of the scalar/resolver artifact.
+ */
 public final class PostgreSqlObservationProvider implements PhysicalObservationProvider
 {
     @FunctionalInterface
@@ -26,8 +29,9 @@ public final class PostgreSqlObservationProvider implements PhysicalObservationP
     private final int timeoutSeconds;
     private static final String SQL = loadSql();
 
-    public PostgreSqlObservationProvider(Connections connect, String providerId, String physicalId,
-    String schema, String table, int timeoutSeconds)
+    public PostgreSqlObservationProvider(
+            Connections connect, String providerId, String physicalId,
+            String schema, String table, int timeoutSeconds)
     {
         this.connect = Objects.requireNonNull(connect);
         for (String value : List.of(providerId, physicalId, schema, table)) {
@@ -38,7 +42,10 @@ public final class PostgreSqlObservationProvider implements PhysicalObservationP
         if (timeoutSeconds < 1) {
             throw new IllegalArgumentException("Positive timeout required");
         }
-        this.providerId = providerId; this.physicalId = physicalId; this.schema = schema; this.table = table;
+        this.providerId = providerId;
+        this.physicalId = physicalId;
+        this.schema = schema;
+        this.table = table;
         this.timeoutSeconds = timeoutSeconds;
     }
 
@@ -72,8 +79,10 @@ public final class PostgreSqlObservationProvider implements PhysicalObservationP
             Map<String, Object> result;
             try (var statement = connection.prepareStatement(SQL)) {
                 statement.setQueryTimeout(timeoutSeconds);
-                statement.setString(1, providerId); statement.setString(2, physicalId);
-                statement.setString(3, schema); statement.setString(4, table);
+                statement.setString(1, providerId);
+                statement.setString(2, physicalId);
+                statement.setString(3, schema);
+                statement.setString(4, table);
                 try (var rows = statement.executeQuery()) {
                     if (!rows.next() || rows.getString(1) == null) {
                         throw new ObservationException();

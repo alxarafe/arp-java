@@ -1,7 +1,10 @@
 package org.alxarafe.arp.dictionary;
 
-/** Portable ARP-DICT-001 error vocabulary. */
-public enum Code {
+/**
+ * Portable ARP-DICT-001 error vocabulary.
+ */
+public enum Code
+{
     DICTIONARY_DOCUMENT_INVALID, DICTIONARY_FORMAT_UNSUPPORTED,
     DICTIONARY_ELEMENT_INVALID, DICTIONARY_DUPLICATE_ELEMENT,
     DICTIONARY_ELEMENT_NOT_FOUND, DICTIONARY_VALUE_TYPE,

@@ -1,4 +1,5 @@
 package org.alxarafe.arp.dictionary;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import org.alxarafe.arp.cds.physical.PhysicalCatalog;
 import org.alxarafe.arp.cds.physical.PhysicalObservationProvider;
@@ -20,15 +21,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.junit.jupiter.api.Assertions.*;
-/** Shared contract products are loaded directly; no local product fixtures or fake row executor. */
+
+/**
+ * Shared contract products are loaded directly; no local product fixtures or fake row executor.
+ */
 class SqlEnginesIntegrationTest
 {
     private static final String ENGINE = System.getenv("ARP_SQL_ENGINE");
+
     private static boolean server()
     {
         return "sqlserver".equals(ENGINE);
     }
+
     private static String readerName()
     {
         return switch (ENGINE) {
@@ -38,23 +45,32 @@ class SqlEnginesIntegrationTest
             default -> throw new IllegalStateException("Explicit engine required");
         };
     }
+
     private static SqlRecordReader reader(SqlRecordReader.Connections connections, int timeout) throws Exception
     {
         return (SqlRecordReader) Class.forName("org.alxarafe.arp.dictionary." + readerName() + "RecordReader")
                 .getConstructor(SqlRecordReader.Connections.class, int.class).newInstance(connections, timeout);
     }
+
     private static PhysicalObservationProvider observer(SqlRecordReader.Connections connections) throws Exception
     {
         return (PhysicalObservationProvider) Class.forName("org.alxarafe.arp.cds.physical."
-                + readerName() + "ObservationProvider").getConstructor(SqlRecordReader.Connections.class,
-                        String.class, String.class, String.class, String.class, int.class)
+                                                                   + readerName() + "ObservationProvider").getConstructor(
+                        SqlRecordReader.Connections.class,
+                        String.class,
+                        String.class,
+                        String.class,
+                        String.class,
+                        int.class)
                 .newInstance(connections, "commercial-db", "storage.products", "commerce", "products", 3);
     }
+
     private static JsonNode products;
     private static Path root;
     private static final List<String> SQL = new ArrayList<>();
     private static final ListGetHost.Context CONTEXT = new ListGetHost.Context("reader/company-7", "policy-1");
     private static Map<String, ListGetHost.Target> ACTIVE;
+
     private static ListGetHost.Target target(String projection)
     {
         var fields = new HashSet<String>();
@@ -62,11 +78,12 @@ class SqlEnginesIntegrationTest
                 .forEach(f -> fields.add(f.asText()));
         return new ListGetHost.Target("products." + projection, 2, 3, fields);
     }
+
     @BeforeAll
     static void contract() throws Exception
     {
         org.junit.jupiter.api.Assumptions.assumeTrue(ENGINE != null && System.getenv("ARP_LISTGET_CONTRACT") != null,
-                "Use integration-docker.py --listget-contract for native LISTGET tests");
+                                                     "Use integration-docker.py --listget-contract for native LISTGET tests");
         root = Path.of(System.getenv("ARP_LISTGET_CONTRACT"));
         String pin = Files.readString(Path.of("listget-contract.ref")).trim();
         var process = new ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD").start();
@@ -74,7 +91,7 @@ class SqlEnginesIntegrationTest
         assertEquals(0, process.waitFor());
         products = ConformanceTest.read(root.resolve("fixtures/cds/listget/v1/products.json"));
         ACTIVE = Map.of("catalog", target("catalog"), "reports", target("summary"),
-                "identified", target("identified"));
+                        "identified", target("identified"));
         try (var c = connect(); var s = c.createStatement()) {
             try (var r = s.executeQuery("SELECT token FROM __arp_cds_test_owner")) {
                 assertTrue(r.next());
@@ -82,6 +99,7 @@ class SqlEnginesIntegrationTest
             }
         }
     }
+
     private static Connection connect() throws java.sql.SQLException
     {
         String host = System.getenv("ARP_DB_HOST"), password = System.getenv("ARP_DB_PASSWORD");
@@ -95,6 +113,7 @@ class SqlEnginesIntegrationTest
         };
         return DriverManager.getConnection(url, server() ? "sa" : "root", password);
     }
+
     private static void exec(String sql) throws Exception
     {
         try (var c = connect(); var s = c.createStatement()) {
@@ -106,6 +125,7 @@ class SqlEnginesIntegrationTest
             }
         }
     }
+
     private static Object reflect(Object target, java.lang.reflect.Method method, Object[] args) throws Throwable
     {
         try {
@@ -114,6 +134,7 @@ class SqlEnginesIntegrationTest
             throw e.getCause();
         }
     }
+
     private static Connection monitored(Harness harness) throws java.sql.SQLException
     {
         if (harness.offline.get()) {
@@ -123,48 +144,58 @@ class SqlEnginesIntegrationTest
         harness.openConnections.incrementAndGet();
         var selected = new AtomicBoolean();
         return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]{Connection.class},
-                (proxy, method, args) -> {
-                    String name = method.getName();
-                    if (name.equals("commit") && selected.get()) {
-                        harness.commitAttempts++;
-                        if (harness.failCommit) {
-                            throw new java.sql.SQLException("private commit failure");
-                        }
-                        Object result = reflect(connection, method, args);
-                        harness.afterCommit.run();
-                        return result;
-                    }
-                    if (name.equals("close")) {
-                        Object result = reflect(connection, method, args);
-                        harness.openConnections.decrementAndGet();
-                        if (selected.get() ? harness.failClose : harness.failGuardClose) {
-                            throw new java.sql.SQLException("private close failure");
-                        }
-                        return result;
-                    }
-                    if (name.equals("rollback") && !selected.get() && harness.failGuardRollback) {
-                        reflect(connection, method, args);
-                        throw new java.sql.SQLException("private mandatory guard rollback failure");
-                    }
-                    Object value = reflect(connection, method, args);
-                    if (name.equals("prepareStatement") && ((String) args[0]).startsWith("SELECT ")
-                            && ((String) args[0]).contains(" ORDER BY ")
-                            && ((String) args[0]).contains(server() ? " FROM [commerce].[products]"
-                                    : " FROM `commerce`.`products`")) {
-                        selected.set(true);
-                        SQL.add((String) args[0]);
-                        return Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
-                                new Class<?>[]{PreparedStatement.class}, (p, m, a) -> {
-                                    Object result = reflect(value, m, a);
-                                    if (m.getName().equals("executeQuery")) {
-                                        harness.afterQuery.run();
-                                    }
-                                    return result;
-                                });
-                    }
-                    return value;
-                });
+                                                   (proxy, method, args) -> {
+                                                       String name = method.getName();
+                                                       if (name.equals("commit") && selected.get()) {
+                                                           harness.commitAttempts++;
+                                                           if (harness.failCommit) {
+                                                               throw new java.sql.SQLException("private commit failure");
+                                                           }
+                                                           Object result = reflect(connection, method, args);
+                                                           harness.afterCommit.run();
+                                                           return result;
+                                                       }
+                                                       if (name.equals("close")) {
+                                                           Object result = reflect(connection, method, args);
+                                                           harness.openConnections.decrementAndGet();
+                                                           if (selected.get() ? harness.failClose : harness.failGuardClose) {
+                                                               throw new java.sql.SQLException("private close failure");
+                                                           }
+                                                           return result;
+                                                       }
+                                                       if (name.equals("rollback") && !selected.get() && harness.failGuardRollback) {
+                                                           reflect(connection, method, args);
+                                                           throw new java.sql.SQLException(
+                                                                   "private mandatory guard rollback failure");
+                                                       }
+                                                       Object value = reflect(connection, method, args);
+                                                       if (name.equals("prepareStatement") && ((String) args[0]).startsWith(
+                                                               "SELECT ")
+                                                               && ((String) args[0]).contains(" ORDER BY ")
+                                                               && ((String) args[0]).contains(server() ? " FROM [commerce].[products]"
+                                                                                                      : " FROM `commerce`.`products`"))
+                                                       {
+                                                           selected.set(true);
+                                                           SQL.add((String) args[0]);
+                                                           return Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
+                                                                                         new Class<?>[]{PreparedStatement.class},
+                                                                                         (p, m, a) -> {
+                                                                                             Object result = reflect(
+                                                                                                     value,
+                                                                                                     m,
+                                                                                                     a);
+                                                                                             if (m.getName().equals(
+                                                                                                     "executeQuery"))
+                                                                                             {
+                                                                                                 harness.afterQuery.run();
+                                                                                             }
+                                                                                             return result;
+                                                                                         });
+                                                       }
+                                                       return value;
+                                                   });
     }
+
     @SuppressWarnings("unchecked")
     private static final class Harness
     {
@@ -176,19 +207,23 @@ class SqlEnginesIntegrationTest
         final AtomicBoolean allowList = new AtomicBoolean(true);
         final AtomicBoolean allowFields = new AtomicBoolean(true);
         final AtomicBoolean capability = new AtomicBoolean(true);
-        Runnable afterQuery = () -> {};
-        Runnable afterCommit = () -> {};
+        Runnable afterQuery = () -> {
+        };
+        Runnable afterCommit = () -> {
+        };
         boolean failCommit, failClose, failGuardRollback, failGuardClose;
         int commitAttempts;
         final java.util.concurrent.atomic.AtomicInteger openConnections =
                 new java.util.concurrent.atomic.AtomicInteger();
-        Runnable onAuthorize = () -> {};
+        Runnable onAuthorize = () -> {
+        };
         final java.util.concurrent.atomic.AtomicReference<String> currentPolicy =
                 new java.util.concurrent.atomic.AtomicReference<>();
         final java.util.concurrent.atomic.AtomicReference<String> tenant =
                 new java.util.concurrent.atomic.AtomicReference<>("7");
         final java.util.concurrent.atomic.AtomicReference<String> product =
                 new java.util.concurrent.atomic.AtomicReference<>();
+
         Map<String, Object> restriction()
         {
             var rows = new LinkedHashMap<String, Object>();
@@ -198,19 +233,24 @@ class SqlEnginesIntegrationTest
             }
             return rows;
         }
+
         final Map<String, Object> definitions;
+
         Harness(String name) throws Exception
         {
             this(name, false);
         }
+
         Harness(String name, boolean narrowRating) throws Exception
         {
             this(name, narrowRating, null);
         }
+
         Harness(String name, boolean narrowRating, JsonNode definitionOverride) throws Exception
         {
             this(name, narrowRating, definitionOverride, 5);
         }
+
         Harness(String name, boolean narrowRating, JsonNode definitionOverride, int timeoutSeconds) throws Exception
         {
             layout = products.at("/layouts/" + name);
@@ -225,31 +265,32 @@ class SqlEnginesIntegrationTest
             String textType = server() ? "nvarchar(max)" : "text";
             String decimalType = server() ? "sql_variant" : "decimal(65,18)";
             exec("CREATE TABLE commerce.products(tenant_id integer NOT NULL,product_id bigint NOT NULL,"
-                    + "sku " + stringType + "(40) NOT NULL,name " + stringType + "(200) NOT NULL,price "
-                    + decimalType + " NOT NULL,rating smallint NOT NULL,description " + textType
-                    + ",available " + (server() ? "bit" : "tinyint(1)") + " NOT NULL,released date NOT NULL,"
-                    + "cost " + decimalType + " NOT NULL,internal_note " + textType + ",PRIMARY KEY(" + pk + "))");
+                         + "sku " + stringType + "(40) NOT NULL,name " + stringType + "(200) NOT NULL,price "
+                         + decimalType + " NOT NULL,rating smallint NOT NULL,description " + textType
+                         + ",available " + (server() ? "bit" : "tinyint(1)") + " NOT NULL,released date NOT NULL,"
+                         + "cost " + decimalType + " NOT NULL,internal_note " + textType + ",PRIMARY KEY(" + pk + "))");
             try (var c = connect()) {
                 for (var row : layout.get("rows")) {
                     var v = row.get("values");
                     var expressions = new ArrayList<String>();
                     for (String col : List.of("tenant_id", "product_id", "sku", "name", "price", "rating",
-                            "description", "available", "released", "cost", "internal_note")) {
+                                              "description", "available", "released", "cost", "internal_note")) {
                         var n = v.get(col);
                         if (server() && (col.equals("price") || col.equals("cost"))) {
                             var decimal = new java.math.BigDecimal(n.asText());
                             int scale = Math.max(0, decimal.scale());
                             expressions.add("CONVERT(sql_variant,CAST(? AS decimal("
-                                    + Math.max(decimal.precision(), scale) + "," + scale + ")))");
+                                                    + Math.max(decimal.precision(), scale) + "," + scale + ")))");
                         } else {
                             expressions.add("?");
                         }
                     }
                     try (var insert = c.prepareStatement("INSERT INTO commerce.products VALUES ("
-                            + String.join(",", expressions) + ")")) {
+                                                                 + String.join(",", expressions) + ")"))
+                    {
                         int i = 1;
                         for (String col : List.of("tenant_id", "product_id", "sku", "name", "price", "rating",
-                                "description", "available", "released", "cost", "internal_note")) {
+                                                  "description", "available", "released", "cost", "internal_note")) {
                             var n = v.get(col);
                             Object value = n.isNull() ? null : switch (col) {
                                 case "tenant_id", "product_id", "price", "rating", "cost" ->
@@ -277,24 +318,35 @@ class SqlEnginesIntegrationTest
             Catalog dictionary = new CatalogBuilder().buildCatalog(List.of(ConformanceTest.source(
                     dictionaryDocument))).catalog().orElseThrow();
             physical = new PhysicalCatalog(dictionary, definitions, Map.of("observed",
-                    observer(SqlEnginesIntegrationTest::connect)));
+                                                                           observer(SqlEnginesIntegrationTest::connect)));
             var executor = reader(() -> monitored(this), timeoutSeconds);
             host = new ListGetHost(physical, executor,
-                    ACTIVE, (target, operation, context) -> {
-                        onAuthorize.run();
-                        String revision = currentPolicy.get();
-                        return new ListGetHost.Access(
-                            (operation.equals("GET") ? allowGet.get() : allowList.get())
-                                    && (revision == null || revision.equals(context.policyRevision())),
-                            allowFields.get() ? Set.of("tenant_id", "product_id", "sku", "name", "price", "rating",
-                                    "description", "available", "released", "cost", "internal_note") : Set.of("sku"),
-                            capability.get() ? restriction() : null);
-                    });
+                                   ACTIVE, (target, operation, context) -> {
+                onAuthorize.run();
+                String revision = currentPolicy.get();
+                return new ListGetHost.Access(
+                        (operation.equals("GET") ? allowGet.get() : allowList.get())
+                                && (revision == null || revision.equals(context.policyRevision())),
+                        allowFields.get() ? Set.of("tenant_id",
+                                                   "product_id",
+                                                   "sku",
+                                                   "name",
+                                                   "price",
+                                                   "rating",
+                                                   "description",
+                                                   "available",
+                                                   "released",
+                                                   "cost",
+                                                   "internal_note") : Set.of("sku"),
+                        capability.get() ? restriction() : null);
+            });
             assertTrue(physical.resolve().valid(), physical.resolve().toJson());
             SQL.clear();
         }
-        JsonNode call(String target, String op, Map<String, Object> inputs,
-                      ListGetHost.Context context) throws Exception
+
+        JsonNode call(
+                String target, String op, Map<String, Object> inputs,
+                ListGetHost.Context context) throws Exception
         {
             var response = host.invoke(ConformanceTest.JSON.writeValueAsBytes(
                     Map.of("target", target, "operation", op, "inputs", inputs)), context);
@@ -302,33 +354,38 @@ class SqlEnginesIntegrationTest
                     "target", target, "operation", op, "response", response)));
             return ConformanceTest.JSON.valueToTree(response);
         }
+
         JsonNode call(String target, String op, Map<String, Object> inputs) throws Exception
         {
             return call(target, op, inputs, CONTEXT);
         }
+
         Map<String, Object> publicKey(JsonNode row)
         {
             var out = new ArrayList<Object>();
             for (var k : layout.at("/definitions/physical/observed/primaryKey")) {
                 String key = k.asText();
                 out.add(Map.of("field", key, "type", key.equals("tenant_id") ? "INT32" : "INT64",
-                        "value", row.get("values").get(key).asText()));
+                               "value", row.get("values").get(key).asText()));
             }
             return Map.of("components", out);
         }
     }
+
     private static JsonNode ok(JsonNode response)
     {
         assertEquals("success", response.path("status").asText(), response.toPrettyString());
         assertTrue(response.path("diagnostics").isEmpty());
         return response.get("output");
     }
+
     private static void error(JsonNode response, String code)
     {
         assertFalse(response.has("output"), response.toPrettyString());
         assertEquals("CDS_LISTGET_" + code, response.at("/diagnostics/0/code").asText(), response.toPrettyString());
         assertEquals(1, response.path("diagnostics").size());
     }
+
     @TestFactory
     List<DynamicTest> databaseReads() throws Exception
     {
@@ -390,7 +447,7 @@ class SqlEnginesIntegrationTest
                     assertEquals(row.at("/values/product_id"), found.at("/record/values/product_id"));
                 }
                 assertTrue(ok(h.call("identified", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0))),
-                        new ListGetHost.Context("public", "public-1"))).path("found").asBoolean());
+                                     new ListGetHost.Context("public", "public-1"))).path("found").asBoolean());
                 for (int i = 0; i < seen.size(); i++) {
                     var expected = ConformanceTest.JSON.createObjectNode();
                     var row = h.layout.get("rows").get(i).get("values");
@@ -409,49 +466,59 @@ class SqlEnginesIntegrationTest
                 var identified = ok(h.call("identified", "LIST", Map.of("limit", 100)));
                 assertEquals(3, identified.at("/page/limit").asInt());
                 assertEquals(h.layout.at("/rows/0/values/product_id").asText(),
-                        identified.at("/records/0/values/product_id").asText());
+                             identified.at("/records/0/values/product_id").asText());
             }));
             tests.add(DynamicTest.dynamicTest(layout
-                    + " absent and inaccessible indistinguishable; reports derived", () -> {
-                var h = new Harness(layout);
-                var row = h.layout.get("rows").get(0).deepCopy();
-                ((com.fasterxml.jackson.databind.node.ObjectNode) row.get("values")).put("product_id", "999");
-                var missing = ok(h.call("identified", "GET", Map.of("key", h.publicKey(row))));
-                var denied = ok(h.call("identified", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(5)))));
-                assertEquals(missing, denied);
-                assertFalse(missing.get("found").asBoolean());
-                var summary = ok(h.call("reports", "LIST", Map.of()));
-                assertEquals(Set.of("sku", "name"), ConformanceTest.JSON.convertValue(
-                        summary.at("/records/0/values"), Map.class).keySet());
-                int queries = SQL.size();
-                error(h.call("reports", "GET", Map.of()), "UNAVAILABLE");
-                assertEquals(queries, SQL.size());
-            }));
+                                                      + " absent and inaccessible indistinguishable; reports derived",
+                                              () -> {
+                                                  var h = new Harness(layout);
+                                                  var row = h.layout.get("rows").get(0).deepCopy();
+                                                  ((com.fasterxml.jackson.databind.node.ObjectNode) row.get("values")).put(
+                                                          "product_id",
+                                                          "999");
+                                                  var missing = ok(h.call("identified",
+                                                                          "GET",
+                                                                          Map.of("key", h.publicKey(row))));
+                                                  var denied = ok(h.call("identified",
+                                                                         "GET",
+                                                                         Map.of("key",
+                                                                                h.publicKey(h.layout.get("rows").get(5)))));
+                                                  assertEquals(missing, denied);
+                                                  assertFalse(missing.get("found").asBoolean());
+                                                  var summary = ok(h.call("reports", "LIST", Map.of()));
+                                                  assertEquals(Set.of("sku", "name"), ConformanceTest.JSON.convertValue(
+                                                          summary.at("/records/0/values"), Map.class).keySet());
+                                                  int queries = SQL.size();
+                                                  error(h.call("reports", "GET", Map.of()), "UNAVAILABLE");
+                                                  assertEquals(queries, SQL.size());
+                                              }));
             tests.add(DynamicTest.dynamicTest(layout
-                    + " authorization, inactive modules and unsupported policy fail closed", () -> {
-                var h = new Harness(layout);
-                h.allowGet.set(false);
-                error(h.call("catalog", "GET", Map.of()), "UNAVAILABLE");
-                assertTrue(SQL.isEmpty());
-                ok(h.call("catalog", "LIST", Map.of()));
-                h.allowGet.set(true);
-                h.allowList.set(false);
-                error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
-                h.allowList.set(true);
-                h.allowFields.set(false);
-                SQL.clear();
-                error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
-                assertTrue(SQL.isEmpty());
-                h.allowFields.set(true);
-                h.capability.set(false);
-                error(h.call("catalog", "LIST", Map.of()), "CAPABILITY_UNAVAILABLE");
-                assertTrue(SQL.isEmpty());
-                h.capability.set(true);
-                h.host.changeAccess(Map.of("catalog", ACTIVE.get("catalog")), () -> {});
-                error(h.call("reports", "LIST", Map.of()), "UNAVAILABLE");
-                assertTrue(SQL.isEmpty());
-                ok(h.call("catalog", "LIST", Map.of()));
-            }));
+                                                      + " authorization, inactive modules and unsupported policy fail closed",
+                                              () -> {
+                                                  var h = new Harness(layout);
+                                                  h.allowGet.set(false);
+                                                  error(h.call("catalog", "GET", Map.of()), "UNAVAILABLE");
+                                                  assertTrue(SQL.isEmpty());
+                                                  ok(h.call("catalog", "LIST", Map.of()));
+                                                  h.allowGet.set(true);
+                                                  h.allowList.set(false);
+                                                  error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
+                                                  h.allowList.set(true);
+                                                  h.allowFields.set(false);
+                                                  SQL.clear();
+                                                  error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
+                                                  assertTrue(SQL.isEmpty());
+                                                  h.allowFields.set(true);
+                                                  h.capability.set(false);
+                                                  error(h.call("catalog", "LIST", Map.of()), "CAPABILITY_UNAVAILABLE");
+                                                  assertTrue(SQL.isEmpty());
+                                                  h.capability.set(true);
+                                                  h.host.changeAccess(Map.of("catalog", ACTIVE.get("catalog")), () -> {
+                                                  });
+                                                  error(h.call("reports", "LIST", Map.of()), "UNAVAILABLE");
+                                                  assertTrue(SQL.isEmpty());
+                                                  ok(h.call("catalog", "LIST", Map.of()));
+                                              }));
             tests.add(DynamicTest.dynamicTest(layout + " opaque bindings, tampering, limit and generation", () -> {
                 var h = new Harness(layout);
                 var page = ok(h.call("catalog", "LIST", Map.of()));
@@ -459,15 +526,15 @@ class SqlEnginesIntegrationTest
                 String cursor = page.at("/page/next").asText();
                 var other = new ListGetHost.Context("other/company-8", "policy-1");
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", ref)), other))
-                        .get("found").asBoolean());
+                                    .get("found").asBoolean());
                 error(h.call("catalog", "LIST", Map.of("continuation", cursor), other), "INVALID_CURSOR");
                 error(h.call("reports", "LIST", Map.of("continuation", cursor)), "INVALID_CURSOR");
                 error(h.call("catalog", "LIST", Map.of("continuation", ref)), "INVALID_CURSOR");
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", cursor))))
-                        .get("found").asBoolean());
+                                    .get("found").asBoolean());
                 error(h.call("catalog", "LIST", Map.of("continuation", cursor, "limit", 3)), "INVALID_CURSOR");
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", ref + "x"))))
-                        .get("found").asBoolean());
+                                    .get("found").asBoolean());
                 error(h.call("catalog", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0)))), "INVALID_KEY");
                 h.physical.invalidate();
                 error(h.call("catalog", "GET", Map.of("key", Map.of("reference", ref))), "GENERATION_EXPIRED");
@@ -475,22 +542,34 @@ class SqlEnginesIntegrationTest
                 ok(h.call("catalog", "LIST", Map.of()));
             }));
             tests.add(DynamicTest.dynamicTest(layout
-                    + " no output on inflight invalidation, module or policy change", () -> {
-                var h = new Harness(layout);
-                h.afterQuery = h.physical::invalidate;
-                error(h.call("catalog", "LIST", Map.of()), "GENERATION_CHANGED");
-                assertFalse(SQL.isEmpty());
-                var missing = h.layout.get("rows").get(0).deepCopy();
-                ((com.fasterxml.jackson.databind.node.ObjectNode) missing.get("values")).put("product_id", "999");
-                error(h.call("identified", "GET", Map.of("key", h.publicKey(missing))), "GENERATION_CHANGED");
-                h.afterQuery = () -> {};
-                ok(h.call("catalog", "LIST", Map.of()));
-                h.afterQuery = () -> h.host.changeAccess(Map.of("catalog", ACTIVE.get("catalog")), () -> {});
-                error(h.call("reports", "LIST", Map.of()), "GENERATION_CHANGED");
-                h.host.changeAccess(ACTIVE, () -> {});
-                h.afterQuery = () -> h.host.changeAccess(ACTIVE, () -> h.allowList.set(false));
-                error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
-            }));
+                                                      + " no output on inflight invalidation, module or policy change",
+                                              () -> {
+                                                  var h = new Harness(layout);
+                                                  h.afterQuery = h.physical::invalidate;
+                                                  error(h.call("catalog", "LIST", Map.of()), "GENERATION_CHANGED");
+                                                  assertFalse(SQL.isEmpty());
+                                                  var missing = h.layout.get("rows").get(0).deepCopy();
+                                                  ((com.fasterxml.jackson.databind.node.ObjectNode) missing.get("values")).put(
+                                                          "product_id",
+                                                          "999");
+                                                  error(h.call("identified",
+                                                               "GET",
+                                                               Map.of("key", h.publicKey(missing))),
+                                                        "GENERATION_CHANGED");
+                                                  h.afterQuery = () -> {
+                                                  };
+                                                  ok(h.call("catalog", "LIST", Map.of()));
+                                                  h.afterQuery = () -> h.host.changeAccess(Map.of("catalog",
+                                                                                                  ACTIVE.get("catalog")),
+                                                                                           () -> {
+                                                                                           });
+                                                  error(h.call("reports", "LIST", Map.of()), "GENERATION_CHANGED");
+                                                  h.host.changeAccess(ACTIVE, () -> {
+                                                  });
+                                                  h.afterQuery = () -> h.host.changeAccess(ACTIVE,
+                                                                                           () -> h.allowList.set(false));
+                                                  error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
+                                              }));
             tests.add(DynamicTest.dynamicTest(layout + " metadata rebuild, external DDL and provider failure", () -> {
                 var h = new Harness(layout);
                 String before = JsonSupport.write(h.definitions);
@@ -523,8 +602,12 @@ class SqlEnginesIntegrationTest
             }));
             tests.add(DynamicTest.dynamicTest(layout + " strict input and SQL bounds", () -> {
                 var h = new Harness(layout);
-                for (var input : List.of(Map.of("offset", 1), Map.of("limit", false), Map.of("limit", 0),
-                        Map.of("limit", 101), Map.of("limit", 1.5), Map.of("sql", "DROP TABLE commerce.products"))) {
+                for (var input : List.of(Map.of("offset", 1),
+                                         Map.of("limit", false),
+                                         Map.of("limit", 0),
+                                         Map.of("limit", 101),
+                                         Map.of("limit", 1.5),
+                                         Map.of("sql", "DROP TABLE commerce.products"))) {
                     error(h.call("catalog", "LIST", (Map) input), "INPUT_SHAPE");
                 }
                 assertTrue(SQL.isEmpty());
@@ -540,6 +623,7 @@ class SqlEnginesIntegrationTest
         }
         return tests;
     }
+
     @TestFactory
     List<DynamicTest> finalReview() throws Exception
     {
@@ -568,13 +652,13 @@ class SqlEnginesIntegrationTest
                 SQL.clear();
                 var actual = h.host.invoke(ConformanceTest.JSON.writeValueAsBytes(request), CONTEXT);
                 assertEquals(vector.at("/expected/response"), ConformanceTest.JSON.valueToTree(actual),
-                        vector.path("id").asText());
+                             vector.path("id").asText());
                 assertTrue(SQL.isEmpty(), vector.path("id").asText());
                 System.out.println("LISTGET_NATIVE_VECTOR:" + vector.path("id").asText());
             }
             // Malformed component objects must also be client errors, never provider failures.
             for (String key : List.of("{\"components\":[null,null]}",
-                    "{\"components\":[1,2]}", "{\"components\":[[],{}]}")) {
+                                      "{\"components\":[1,2]}", "{\"components\":[[],{}]}")) {
                 var request = "{\"target\":\"identified\",\"operation\":\"GET\",\"inputs\":{\"key\":" + key + "}}";
                 error(ConformanceTest.JSON.valueToTree(h.host.invoke(request.getBytes(), CONTEXT)), "INVALID_KEY");
             }
@@ -620,7 +704,7 @@ class SqlEnginesIntegrationTest
             };
             SQL.clear();
             error(h.call("catalog", "GET", Map.of("key", Map.of("reference", "rec-unknown-unissued"))),
-                    "GENERATION_CHANGED");
+                  "GENERATION_CHANGED");
             assertTrue(SQL.isEmpty());
         }));
         tests.add(DynamicTest.dynamicTest("review independent token bindings and access revocation", () -> {
@@ -631,16 +715,17 @@ class SqlEnginesIntegrationTest
             String cursor = page.at("/page/next").asText();
             assertTrue(reference.length() <= 128 && cursor.length() <= 128);
             for (var context : List.of(new ListGetHost.Context("different-reader/company-7", "policy-1"),
-                    new ListGetHost.Context("reader/company-8", "policy-1"),
-                    new ListGetHost.Context("reader/company-7", "policy-2"))) {
+                                       new ListGetHost.Context("reader/company-8", "policy-1"),
+                                       new ListGetHost.Context("reader/company-7", "policy-2"))) {
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", reference)), context))
-                        .path("found").asBoolean());
+                                    .path("found").asBoolean());
                 error(h.call("catalog", "LIST", Map.of("limit", 1, "continuation", cursor), context),
-                        "INVALID_CURSOR");
+                      "INVALID_CURSOR");
             }
             h.afterQuery = () -> h.host.changeAccess(ACTIVE, () -> h.allowGet.set(false));
             error(h.call("catalog", "GET", Map.of("key", Map.of("reference", reference))), "UNAVAILABLE");
-            h.afterQuery = () -> {};
+            h.afterQuery = () -> {
+            };
             h.host.changeAccess(ACTIVE, () -> h.allowGet.set(true));
             var fresh = ok(h.call("catalog", "LIST", Map.of()));
             String bound = fresh.at("/records/0/key/reference").asText();
@@ -659,14 +744,15 @@ class SqlEnginesIntegrationTest
             var catalogPage = ok(projections.call("catalog", "LIST", Map.of()));
             String catalogRef = catalogPage.at("/records/0/key/reference").asText();
             assertFalse(ok(projections.call("reports", "GET", Map.of("key", Map.of("reference", catalogRef))))
-                    .path("found").asBoolean());
+                                .path("found").asBoolean());
             var reportsPage = ok(projections.call("reports", "LIST", Map.of()));
             String reportsRef = reportsPage.at("/records/0/key/reference").asText();
             assertTrue(ok(projections.call("reports", "GET", Map.of("key", Map.of("reference", reportsRef))))
-                    .path("found").asBoolean());
+                               .path("found").asBoolean());
         }));
         return tests;
     }
+
     @TestFactory
     List<DynamicTest> publicationLifecycle()
     {
@@ -693,9 +779,10 @@ class SqlEnginesIntegrationTest
                 ok(h.call("catalog", "LIST", Map.of()));
                 assertEquals(3, blocked.get(), "LIST/GET/empty SQL page keep publication guard");
                 assertEquals(0, h.openConnections.get(), "all owned connections closed");
-                h.afterCommit = () -> {};
+                h.afterCommit = () -> {
+                };
                 exec(server() ? "ALTER TABLE commerce.products ADD publication_gap nvarchar(max)"
-                                        : "ALTER TABLE commerce.products ADD COLUMN publication_gap text");
+                             : "ALTER TABLE commerce.products ADD COLUMN publication_gap text");
                 h.physical.invalidate();
                 h.tenant.set("7");
                 ok(h.call("catalog", "LIST", Map.of()));
@@ -705,7 +792,7 @@ class SqlEnginesIntegrationTest
                 h.failCommit = true;
                 error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
                 error(h.call("identified", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0)))),
-                        "READ_FAILED");
+                      "READ_FAILED");
                 h.tenant.set("999");
                 error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
                 assertEquals(3, h.commitAttempts);
@@ -729,7 +816,8 @@ class SqlEnginesIntegrationTest
                 error(h.call("catalog", "LIST", Map.of()), "GENERATION_CHANGED");
                 h.afterCommit = () -> h.host.changeAccess(ACTIVE, () -> h.allowList.set(false));
                 error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
-                h.afterCommit = () -> {};
+                h.afterCommit = () -> {
+                };
                 h.allowList.set(true);
                 ok(h.call("catalog", "LIST", Map.of()));
                 assertEquals(0, h.openConnections.get());
@@ -737,6 +825,7 @@ class SqlEnginesIntegrationTest
         }
         return tests;
     }
+
     @TestFactory
     List<DynamicTest> engineSafety()
     {
@@ -747,15 +836,16 @@ class SqlEnginesIntegrationTest
                 try (var c = connect(); var statement = c.createStatement()) {
                     statement.execute(server() ? "SET LOCK_TIMEOUT 150" : "SET SESSION lock_wait_timeout=1");
                     var error = assertThrows(java.sql.SQLException.class, () -> statement.execute(server()
-                            ? "ALTER TABLE commerce.products ADD selected_gap int"
-                            : "ALTER TABLE commerce.products ADD COLUMN selected_gap int"));
+                                                                                                          ? "ALTER TABLE commerce.products ADD selected_gap int"
+                                                                                                          : "ALTER TABLE commerce.products ADD COLUMN selected_gap int"));
                     assertEquals(server() ? 1222 : 1205, error.getErrorCode());
                 } catch (java.sql.SQLException error) {
                     throw new AssertionError(error);
                 }
             };
             ok(h.call("catalog", "LIST", Map.of()));
-            h.afterQuery = () -> {};
+            h.afterQuery = () -> {
+            };
             exec("ALTER TABLE commerce.products ADD COLUMN selected_gap int");
             error(h.call("catalog", "LIST", Map.of()), "GENERATION_CHANGED");
         }));
@@ -767,11 +857,11 @@ class SqlEnginesIntegrationTest
                 exec("ALTER TABLE commerce.products ADD COLUMN invisible_fact int INVISIBLE");
                 exec("CREATE USER 'arp_columns'@'%' IDENTIFIED BY '" + password + "'");
                 exec("GRANT SELECT(tenant_id,product_id,sku,name,price,rating,description,available,"
-                        + "released,cost,internal_note) ON commerce.products TO 'arp_columns'@'%'");
+                             + "released,cost,internal_note) ON commerce.products TO 'arp_columns'@'%'");
                 limited = () -> DriverManager.getConnection((ENGINE.equals("mysql") ? "jdbc:mysql://"
-                        : "jdbc:mariadb://") + System.getenv("ARP_DB_HOST") + ":3306/commerce"
-                        + (ENGINE.equals("mysql") ? "?allowPublicKeyRetrieval=true&sslMode=DISABLED" : ""),
-                        "arp_columns", password);
+                                                                    : "jdbc:mariadb://") + System.getenv("ARP_DB_HOST") + ":3306/commerce"
+                                                                    + (ENGINE.equals("mysql") ? "?allowPublicKeyRetrieval=true&sslMode=DISABLED" : ""),
+                                                            "arp_columns", password);
             } else {
                 exec("CREATE USER arp_columns WITHOUT LOGIN");
                 exec("GRANT SELECT ON commerce.products TO arp_columns");
@@ -786,17 +876,17 @@ class SqlEnginesIntegrationTest
             var restricted = observer(limited);
             assertThrows(org.alxarafe.arp.cds.physical.ObservationException.class, restricted::observe);
             exec(server() ? "GRANT VIEW DEFINITION TO arp_columns"
-                    : "GRANT SELECT ON commerce.products TO 'arp_columns'@'%'");
+                         : "GRANT SELECT ON commerce.products TO 'arp_columns'@'%'");
             var facts = restricted.observe();
             assertEquals(server() ? 11 : 12, ((List<?>) facts.get("columns")).size());
             if (server()) {
                 exec("CREATE FUNCTION commerce.arp_filter(@tenant int) RETURNS TABLE WITH SCHEMABINDING "
-                        + "AS RETURN SELECT 1 AS allowed WHERE @tenant=7");
+                             + "AS RETURN SELECT 1 AS allowed WHERE @tenant=7");
                 exec("CREATE SECURITY POLICY commerce.arp_policy ADD FILTER PREDICATE "
-                        + "commerce.arp_filter(tenant_id) ON commerce.products WITH (STATE=ON)");
+                             + "commerce.arp_filter(tenant_id) ON commerce.products WITH (STATE=ON)");
                 try {
                     assertThrows(org.alxarafe.arp.cds.physical.ObservationException.class,
-                            () -> observer(SqlEnginesIntegrationTest::connect).observe());
+                                 () -> observer(SqlEnginesIntegrationTest::connect).observe());
                     assertThrows(org.alxarafe.arp.cds.physical.ObservationException.class, restricted::observe);
                 } finally {
                     exec("DROP SECURITY POLICY commerce.arp_policy");
@@ -812,19 +902,20 @@ class SqlEnginesIntegrationTest
             if (server()) {
                 exec("ALTER TABLE commerce.products DROP COLUMN price");
                 exec("ALTER TABLE commerce.products ADD price decimal(38,18) NOT NULL "
-                        + "DEFAULT(0.123456789012345678)");
+                             + "DEFAULT(0.123456789012345678)");
                 h.physical.invalidate();
                 var page = ok(h.call("catalog", "LIST", Map.of()));
                 assertEquals("0.123456789012345678", page.at("/records/0/values/price").asText());
                 String reference = page.at("/records/0/key/reference").asText();
                 assertEquals("0.123456789012345678", ok(h.call("catalog", "GET",
-                        Map.of("key", Map.of("reference", reference)))).at("/record/values/price").asText());
+                                                               Map.of("key", Map.of("reference", reference)))).at(
+                        "/record/values/price").asText());
             } else {
                 try (var c = connect()) {
                     reader(() -> c, 3).beginTransaction(c);
                     try (var statement = c.createStatement()) {
                         assertThrows(java.sql.SQLException.class,
-                                () -> statement.executeUpdate("UPDATE commerce.products SET rating=1"));
+                                     () -> statement.executeUpdate("UPDATE commerce.products SET rating=1"));
                     }
                     c.rollback();
                 }

@@ -16,7 +16,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
-/** Pure CDS-READ-001 metadata compiler; no discovery, SQL, row access or scalar validation copy. */
+/**
+ * Pure CDS-READ-001 metadata compiler; no discovery, SQL, row access or scalar validation copy.
+ */
 @SuppressWarnings("unchecked")
 public final class CdsReadResolver
 {
@@ -24,6 +26,7 @@ public final class CdsReadResolver
     static final Comparator<String> ORDER = (a, b) -> Arrays.compareUnsigned(
             a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
     private static final Map<String, BigInteger[]> RANGES = integerRanges();
+
     private static Map<String, BigInteger[]> integerRanges()
     {
         var result = new HashMap<String, BigInteger[]>();
@@ -35,6 +38,7 @@ public final class CdsReadResolver
         }
         return Collections.unmodifiableMap(result);
     }
+
     private final Map<String, Map<String, Object>> schemas = new HashMap<>();
 
     public CdsReadResolver()
@@ -67,6 +71,7 @@ public final class CdsReadResolver
     private static final class Failure extends RuntimeException
     {
         final Map<String, Object> issue;
+
         Failure(String code, String at, String family)
         {
             issue = Map.of("family", family, "code", "CDS_READ_" + code, "at", at);
@@ -85,7 +90,9 @@ public final class CdsReadResolver
         }
     }
 
-    /** Independent intake; its document may be null. Expected input errors have one contractual issue. */
+    /**
+     * Independent intake; its document may be null. Expected input errors have one contractual issue.
+     */
     public Map<String, Object> parse(Source source)
     {
         try {
@@ -96,11 +103,13 @@ public final class CdsReadResolver
             return (Map<String, Object>) CdsReadResult.freeze(output);
         } catch (Rejected e) {
             return CdsReadResult.failure(e.code == Code.DICTIONARY_LIMIT_EXCEEDED ? "LIMIT" : "SOURCE_INVALID",
-                    pointer("sources", source.sourceId()), "definition-invalid").projection();
+                                         pointer("sources", source.sourceId()), "definition-invalid").projection();
         }
     }
 
-    /** Trusted supplied handles; decode the complete batch before schema resolution. */
+    /**
+     * Trusted supplied handles; decode the complete batch before schema resolution.
+     */
     public CdsReadResult resolveSources(Map<String, Map<String, Source>> sources, Catalog dictionary)
     {
         if (sources.values().stream().mapToInt(Map::size).sum() > 256) {
@@ -122,7 +131,9 @@ public final class CdsReadResolver
         return resolve(bundle, dictionary);
     }
 
-    /** Decoded JSON object graph. Retained results never share mutable caller state. */
+    /**
+     * Decoded JSON object graph. Retained results never share mutable caller state.
+     */
     public CdsReadResult resolve(Map<String, Object> supplied, Catalog dictionary)
     {
         try {
@@ -151,7 +162,7 @@ public final class CdsReadResolver
                 var logical = item.getValue().doc;
                 String at = item.getValue().at;
                 need(indexes.get("physical").containsKey(text(logical, "physical")),
-                        "REFERENCE_NOT_FOUND", at + "/physical");
+                     "REFERENCE_NOT_FOUND", at + "/physical");
                 var physical = indexes.get("physical").get(text(logical, "physical")).doc;
                 var columns = new TreeMap<String, Object>(ORDER);
                 for (Object col : list(physical.get("columns"))) {
@@ -162,8 +173,8 @@ public final class CdsReadResolver
                 var fields = new ArrayList<Object>();
                 for (var column : columns.entrySet()) {
                     fields.add(field(map(column.getValue()),
-                        map(overlays.getOrDefault(column.getKey(), Map.of())), dictionary,
-                        at + pointer("fields", column.getKey())));
+                                     map(overlays.getOrDefault(column.getKey(), Map.of())), dictionary,
+                                     at + pointer("fields", column.getKey())));
                 }
                 models.put(item.getKey(), Map.of("id", item.getKey(), "physical", physical, "fields", fields));
             }
@@ -171,30 +182,43 @@ public final class CdsReadResolver
             for (String id : sorted(indexes.get("projections")).keySet()) {
                 projection(id, List.of(), indexes.get("projections"), models, projected);
             }
-            return new CdsReadResult(Map.of("valid", true, "issues", List.of(),
-                    "models", new ArrayList<>(models.values()), "projections", new ArrayList<>(projected.values())));
+            return new CdsReadResult(Map.of("valid",
+                                            true,
+                                            "issues",
+                                            List.of(),
+                                            "models",
+                                            new ArrayList<>(models.values()),
+                                            "projections",
+                                            new ArrayList<>(projected.values())));
         } catch (Failure e) {
             return new CdsReadResult(Map.of("valid", false, "issues", List.of(e.issue)));
         }
     }
 
-    private record Entry(Map<String, Object> doc, String at) { }
+    private record Entry(Map<String, Object> doc, String at)
+    {
+    }
+
     private static Map<String, Object> map(Object v)
     {
         return (Map<String, Object>) v;
     }
+
     private static List<Object> list(Object v)
     {
         return (List<Object>) v;
     }
+
     private static String text(Map<String, Object> v, String key)
     {
         return (String) v.get(key);
     }
+
     private static Map<String, Object> object(Map<String, Object> v, String key)
     {
         return map(v.getOrDefault(key, Map.of()));
     }
+
     private static <T> Map<String, T> sorted(Map<String, T> v)
     {
         var sorted = new TreeMap<String, T>(ORDER);
@@ -244,7 +268,7 @@ public final class CdsReadResolver
                 }
             }
             need(!values.keySet().containsAll(List.of("minimum", "maximum"))
-                    || values.get("minimum").compareTo(values.get("maximum")) <= 0, "PHYSICAL_INVALID", point);
+                         || values.get("minimum").compareTo(values.get("maximum")) <= 0, "PHYSICAL_INVALID", point);
             var range = col.containsKey("scalarType") ? RANGES.get(text(col, "scalarType")) : null;
             if (range != null) {
                 for (var v : values.values()) {
@@ -254,7 +278,7 @@ public final class CdsReadResolver
             if (col.containsKey("decimalGeometry")) {
                 var g = object(col, "decimalGeometry");
                 need(decimal(g.get("scale")).compareTo(decimal(g.get("precision"))) <= 0,
-                        "PHYSICAL_INVALID", point);
+                     "PHYSICAL_INVALID", point);
             }
         }
         need(names.containsAll(list(doc.getOrDefault("primaryKey", List.of()))), "PHYSICAL_INVALID", at);
@@ -276,11 +300,14 @@ public final class CdsReadResolver
         }
     }
 
-    private static Map<String, Object> field(Map<String, Object> col, Map<String, Object> overlay,
-    Catalog dictionary, String at)
+    private static Map<String, Object> field(
+            Map<String, Object> col, Map<String, Object> overlay,
+            Catalog dictionary, String at)
     {
         var out = new LinkedHashMap<String, Object>();
-        out.put("name", col.get("name")); out.put("physical", col); out.put("compatibility", "not-verified");
+        out.put("name", col.get("name"));
+        out.put("physical", col);
+        out.put("compatibility", "not-verified");
         String type = text(col, "scalarType");
         var intrinsic = new LinkedHashMap<String, Object>();
         if (overlay.containsKey("dictionary")) {
@@ -305,7 +332,9 @@ public final class CdsReadResolver
         }
         var effective = new LinkedHashMap<>(intrinsic);
         if (type != null) {
-            out.put("type", type); out.put("intrinsicConstraints", intrinsic); out.put("constraints", effective);
+            out.put("type", type);
+            out.put("intrinsicConstraints", intrinsic);
+            out.put("constraints", effective);
         }
         var context = object(overlay, "constraints");
         if (overlay.containsKey("constraints")) {
@@ -313,9 +342,9 @@ public final class CdsReadResolver
         }
         if (!context.isEmpty()) {
             need(type != null && RANGES.containsKey(type) && interval(intrinsic),
-                    "PROFILE_UNSUPPORTED", at + "/constraints");
+                 "PROFILE_UNSUPPORTED", at + "/constraints");
             need(Set.of("minimum", "maximum").containsAll(context.keySet()),
-                    "PROFILE_UNSUPPORTED", at + "/constraints");
+                 "PROFILE_UNSUPPORTED", at + "/constraints");
         }
         if (type != null && RANGES.containsKey(type) && interval(intrinsic)) {
             var range = RANGES.get(type);
@@ -325,7 +354,7 @@ public final class CdsReadResolver
                 if (context.containsKey(key)) {
                     var v = bound(context.get(key), at + "/constraints/" + key);
                     need(key.equals("minimum") ? v.compareTo(lo) >= 0 : v.compareTo(hi) <= 0,
-                        "CONSTRAINT_WEAKENING", at + "/constraints/" + key);
+                         "CONSTRAINT_WEAKENING", at + "/constraints/" + key);
                     if (key.equals("minimum")) {
                         lo = v;
                     } else {
@@ -342,7 +371,7 @@ public final class CdsReadResolver
                 var plo = p[0].max(new BigInteger((String) extent.getOrDefault("minimum", p[0].toString())));
                 var phi = p[1].min(new BigInteger((String) extent.getOrDefault("maximum", p[1].toString())));
                 need(plo.compareTo(lo) <= 0 && hi.compareTo(phi) <= 0,
-                        "DOMAIN_NOT_REPRESENTABLE", at, "physical-incompatible");
+                     "DOMAIN_NOT_REPRESENTABLE", at, "physical-incompatible");
                 out.put("compatibility", "compatible");
             }
         }
@@ -354,8 +383,9 @@ public final class CdsReadResolver
         return out;
     }
 
-    private Map<String, Object> projection(String id, List<String> stack, Map<String, Entry> index,
-    Map<String, Object> models, Map<String, Object> out)
+    private Map<String, Object> projection(
+            String id, List<String> stack, Map<String, Entry> index,
+            Map<String, Object> models, Map<String, Object> out)
     {
         var doc = index.get(id).doc;
         String at = index.get(id).at;
@@ -363,7 +393,7 @@ public final class CdsReadResolver
         need(stack.size() < 64, "LIMIT", at + "/source");
         var operations = list(doc.get("operations"));
         need(List.of("LIST", "GET").containsAll(operations), "OPERATION_UNSUPPORTED",
-                at + "/operations", "operation-not-allowed");
+             at + "/operations", "operation-not-allowed");
         var source = object(doc, "source");
         String entity;
         List<Object> fields;
@@ -374,9 +404,11 @@ public final class CdsReadResolver
         } else {
             String parentId = text(source, "projection");
             need(index.containsKey(parentId), "REFERENCE_NOT_FOUND", at + "/source");
-            var next = new ArrayList<>(stack); next.add(id);
+            var next = new ArrayList<>(stack);
+            next.add(id);
             var parent = projection(parentId, next, index, models, out);
-            entity = text(parent, "entity"); fields = list(parent.get("fields"));
+            entity = text(parent, "entity");
+            fields = list(parent.get("fields"));
             need(list(parent.get("operations")).containsAll(operations), "OPERATION_EXPANSION", at + "/operations");
         }
         var available = new HashMap<String, Map<String, Object>>();
@@ -397,7 +429,7 @@ public final class CdsReadResolver
             selected.add(publicField);
         }
         var result = Map.<String, Object>of("id", id, "source", source, "entity", entity,
-                "fields", selected, "operations", operations);
+                                            "fields", selected, "operations", operations);
         out.put(id, result);
         return result;
     }
@@ -407,7 +439,9 @@ public final class CdsReadResolver
         return new BigDecimal(v.toString());
     }
 
-    /** Only the keywords present in the pinned authoring schemas; never validates scalar values. */
+    /**
+     * Only the keywords present in the pinned authoring schemas; never validates scalar values.
+     */
     private static boolean schema(Object v, Map<String, Object> s, Map<String, Object> root)
     {
         if (s.containsKey("$ref")) {
@@ -451,7 +485,9 @@ public final class CdsReadResolver
                 return false;
             }
             if (s.containsKey("pattern") && !java.util.regex.Pattern.compile(text(s, "pattern"),
-                    java.util.regex.Pattern.UNICODE_CHARACTER_CLASS).matcher(string).find()) {
+                                                                             java.util.regex.Pattern.UNICODE_CHARACTER_CLASS).matcher(
+                    string).find())
+            {
                 return false;
             }
         }

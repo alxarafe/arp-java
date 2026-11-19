@@ -11,34 +11,41 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** SQL Server syntax, values and transaction-held table S protection only. */
+/**
+ * SQL Server syntax, values and transaction-held table S protection only.
+ */
 public class SqlServerRecordReader extends SqlRecordReader
 {
     public SqlServerRecordReader(Connections connections)
     {
         this(connections, 5);
     }
+
     public SqlServerRecordReader(Connections connections, int timeoutSeconds)
     {
         super(connections, timeoutSeconds);
         identifierStart = "[";
         identifierEnd = "]";
     }
+
     @Override
     protected void beginTransaction(Connection connection) throws SQLException
     {
         SqlServerMetadata.begin(connection);
     }
+
     @Override
     protected void initializeSession(Connection connection) throws SQLException
     {
         SqlServerMetadata.initialize(connection, timeoutSeconds);
     }
+
     @Override
     protected String limitClause()
     {
         return " OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY";
     }
+
     @Override
     protected String keyComparison(List<String> keys, boolean get, List<String> position, List<Object> parameters)
     {
@@ -60,6 +67,7 @@ public class SqlServerRecordReader extends SqlRecordReader
         }
         return "(" + String.join(" OR ", terms) + ")";
     }
+
     @Override
     protected String valueExpression(String column, ScalarType type)
     {
@@ -73,6 +81,7 @@ public class SqlServerRecordReader extends SqlRecordReader
         };
         return value + " AS " + column;
     }
+
     @Override
     protected boolean supportsColumn(ReadPlan.Column column, Map<String, Object> physical)
     {
@@ -83,16 +92,22 @@ public class SqlServerRecordReader extends SqlRecordReader
         return column.type() == ScalarType.DECIMAL && nativeType.equals("sql_variant")
                 || super.supportsColumn(column, physical);
     }
+
     @Override
     protected void acquireReadProtection(Connection connection, SqlSource source) throws SQLException
     {
         SqlServerMetadata.protect(connection, timeoutSeconds, source.schema(), source.table());
     }
+
     @Override
     protected Map<String, Object> observePhysical(SqlSource source) throws ObservationException
     {
         var facts = (Map<?, ?>) source.physical().get("source");
-        return new SqlServerObservationProvider(connections, (String) facts.get("provider"),
-                (String) source.physical().get("id"), source.schema(), source.table(), timeoutSeconds).observe();
+        return new SqlServerObservationProvider(connections,
+                                                (String) facts.get("provider"),
+                                                (String) source.physical().get("id"),
+                                                source.schema(),
+                                                source.table(),
+                                                timeoutSeconds).observe();
     }
 }

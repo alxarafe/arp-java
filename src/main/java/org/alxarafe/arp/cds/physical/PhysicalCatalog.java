@@ -1,18 +1,22 @@
 package org.alxarafe.arp.cds.physical;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+
 import org.alxarafe.arp.dictionary.Catalog;
 import org.alxarafe.arp.dictionary.CdsReadPublication;
 import org.alxarafe.arp.dictionary.CdsReadResolver;
 import org.alxarafe.arp.dictionary.CdsReadResult;
 
-/** Lazy local catalog; definition bytes are owned and observers run outside the publication lock. */
+/**
+ * Lazy local catalog; definition bytes are owned and observers run outside the publication lock.
+ */
 public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCatalog
 {
     private final Object resolveGate = new Object();
@@ -25,8 +29,9 @@ public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCa
             .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_INTEGER_FOR_INTS)
             .enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
 
-    public PhysicalCatalog(Catalog dictionary, Map<String, Object> definitions,
-    Map<String, PhysicalObservationProvider> providers)
+    public PhysicalCatalog(
+            Catalog dictionary, Map<String, Object> definitions,
+            Map<String, PhysicalObservationProvider> providers)
     {
         this.dictionary = Objects.requireNonNull(dictionary);
         try {
@@ -44,16 +49,25 @@ public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCa
     }
 
     private String blocked;
+
     public synchronized void invalidate()
     {
-        publication.invalidate(); blocked = null;
+        publication.invalidate();
+        blocked = null;
         for (var provider : providers.values()) {
             if (provider instanceof InvalidatablePhysicalProvider persisted) {
-                try { persisted.invalidate(); }
-                catch (ObservationException e) { if (blocked == null) blocked = provider.providerId(); }
+                try {
+                    persisted.invalidate();
+                } catch (ObservationException e) {
+                    if (blocked == null) {
+                        blocked = provider.providerId();
+                    }
+                }
             }
         }
-        if (blocked != null) throw new IllegalStateException("Physical invalidation unavailable");
+        if (blocked != null) {
+            throw new IllegalStateException("Physical invalidation unavailable");
+        }
     }
 
     public synchronized Optional<CdsReadResult> current()
@@ -66,7 +80,9 @@ public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCa
         return publication.generation();
     }
 
-    /** The caller must coordinate host policy changes using its own publication gate. */
+    /**
+     * The caller must coordinate host policy changes using its own publication gate.
+     */
     public synchronized <T> T publishRead(CdsReadResult expected, java.util.function.Supplier<T> publish)
     {
         if (expected == null || publication.current().orElse(null) != expected) {
@@ -90,8 +106,12 @@ public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCa
             if (publication.current().isPresent()) {
                 return publication.current().orElseThrow();
             }
-            if (blocked != null) return CdsReadResult.failure("OBSERVATION_FAILED",
-                    "/providers/" + blocked.replace("~", "~0").replace("/", "~1"), "execution-failure");
+            if (blocked != null) {
+                return CdsReadResult.failure("OBSERVATION_FAILED",
+                                             "/providers/" + blocked.replace("~", "~0").replace("/",
+                                                                                                "~1"),
+                                             "execution-failure");
+            }
             ticket = publication.beginGeneration();
         }
         Map<String, Object> bundle;
@@ -107,7 +127,9 @@ public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCa
             } catch (ObservationException e) {
                 String id = entry.getValue().providerId().replace("~", "~0").replace("/", "~1");
                 return publication.publish(ticket,
-                        CdsReadResult.failure("OBSERVATION_FAILED", "/providers/" + id, "execution-failure"));
+                                           CdsReadResult.failure("OBSERVATION_FAILED",
+                                                                 "/providers/" + id,
+                                                                 "execution-failure"));
             }
         }
         bundle.put("physical", physical);
