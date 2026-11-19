@@ -6,6 +6,7 @@ public class MariaDbRecordReader extends MySqlRecordReaderBase
     {
         this(connections, 5);
     }
+
     public MariaDbRecordReader(Connections connections, int timeoutSeconds)
     {
         super(connections, timeoutSeconds);

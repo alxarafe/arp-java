@@ -9,14 +9,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-/** Bounded metadata plumbing, shared by observers; no row execution or dialect framework. */
+/**
+ * Bounded metadata plumbing, shared by observers; no row execution or dialect framework.
+ */
 public final class SqlMetadata
 {
     private SqlMetadata()
     {
     }
-    public static List<Map<String, String>> query(Connection connection, int timeout, String sql,
-                                                   String... parameters) throws SQLException
+
+    public static List<Map<String, String>> query(
+            Connection connection, int timeout, String sql,
+            String... parameters) throws SQLException
     {
         try (var statement = connection.prepareStatement(sql)) {
             statement.setQueryTimeout(timeout);
@@ -40,6 +44,7 @@ public final class SqlMetadata
             return result;
         }
     }
+
     public static void execute(Connection connection, int timeout, String... sql) throws SQLException
     {
         try (var statement = connection.createStatement()) {
@@ -52,12 +57,15 @@ public final class SqlMetadata
             }
         }
     }
+
     public static boolean truth(String value)
     {
         return "1".equals(value) || "YES".equals(value) || "true".equalsIgnoreCase(value);
     }
-    public static Map<String, Object> column(String name, String nativeType, int ordinal, boolean nullable,
-                                               String scalar, boolean generated, boolean identity)
+
+    public static Map<String, Object> column(
+            String name, String nativeType, int ordinal, boolean nullable,
+            String scalar, boolean generated, boolean identity)
     {
         var value = new LinkedHashMap<String, Object>();
         value.put("name", name);
@@ -73,20 +81,22 @@ public final class SqlMetadata
                 int bits = Integer.parseInt(scalar.substring(signed ? 3 : 4));
                 var high = BigInteger.ONE.shiftLeft(bits - (signed ? 1 : 0));
                 value.put("integerRange", Map.of("minimum", signed ? high.negate().toString() : "0",
-                        "maximum", high.subtract(BigInteger.ONE).toString()));
+                                                 "maximum", high.subtract(BigInteger.ONE).toString()));
             }
         }
         return value;
     }
-    public static Map<String, Object> physical(String id, String provider, String dialect, String schema,
-                                                 String table, String version, List<Map<String, Object>> columns,
-                                                 List<String> keys) throws SQLException
+
+    public static Map<String, Object> physical(
+            String id, String provider, String dialect, String schema,
+            String table, String version, List<Map<String, Object>> columns,
+            List<String> keys) throws SQLException
     {
         if (columns.isEmpty() || columns.size() > 2048) {
             throw new SQLException("Invalid metadata cardinality");
         }
         return Map.of("apiVersion", "arp.physical/v1", "id", id, "kind", "table", "source",
-                Map.of("provider", provider, "dialect", dialect, "schema", schema, "name", table,
-                        "engineVersion", version), "columns", columns, "primaryKey", keys);
+                      Map.of("provider", provider, "dialect", dialect, "schema", schema, "name", table,
+                             "engineVersion", version), "columns", columns, "primaryKey", keys);
     }
 }

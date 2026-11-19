@@ -6,6 +6,7 @@ public class MySqlRecordReader extends MySqlRecordReaderBase
     {
         this(connections, 5);
     }
+
     public MySqlRecordReader(Connections connections, int timeoutSeconds)
     {
         super(connections, timeoutSeconds);

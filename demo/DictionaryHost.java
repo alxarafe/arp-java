@@ -29,7 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
-/** Local demo transport only; no HTTP dependency is added to the library. */
+/**
+ * Local demo transport only; no HTTP dependency is added to the library.
+ */
 public final class DictionaryHost
 {
     private static final int LIMIT = 16_384;
@@ -49,18 +51,19 @@ public final class DictionaryHost
         URI uri = URI.create(origin);
         if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) || uri.getHost() == null
                 || uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null
-                || !uri.getRawPath().isEmpty() || !origin.equals(uri.getScheme() + "://" + uri.getRawAuthority())) {
+                || !uri.getRawPath().isEmpty() || !origin.equals(uri.getScheme() + "://" + uri.getRawAuthority()))
+        {
             throw new IllegalArgumentException("ARP_DEMO_ORIGIN must be one exact http(s) origin");
         }
         Path root = Path.of(System.getenv().getOrDefault("ARP_CONTRACT_PATH", "/contract"));
         var sources = new ArrayList<Source>();
         var hashes = new ArrayList<Map<String, String>>();
         for (String path : List.of("fixtures/dictionary/v1/catalog.json",
-                "fixtures/dictionary/v1/sources/portable-equivalent.json")) {
+                                   "fixtures/dictionary/v1/sources/portable-equivalent.json")) {
             byte[] bytes = Files.readAllBytes(root.resolve(path));
             sources.add(new Source("arp-demo", path, Source.Encoding.JSON, bytes));
             hashes.add(Map.of("path", path, "sha256",
-                    HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))));
+                              HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))));
         }
         var build = new CatalogBuilder().buildCatalog(sources);
         if (!build.valid()) {
@@ -68,9 +71,9 @@ public final class DictionaryHost
         }
         catalog = build.catalog().orElseThrow();
         info = Map.of("demoProtocol", "arp-demo-java/1", "runtime", "java",
-                "libraryContractRef", Files.readString(Path.of("contract.ref")).trim(),
-                "capabilities", List.of("dictionary.list", "dictionary.describe", "dictionary.validate"),
-                "sources", hashes);
+                      "libraryContractRef", Files.readString(Path.of("contract.ref")).trim(),
+                      "capabilities", List.of("dictionary.list", "dictionary.describe", "dictionary.validate"),
+                      "sources", hashes);
     }
 
     public static void main(String[] args) throws Exception
@@ -107,7 +110,8 @@ public final class DictionaryHost
         }
         String method = exchange.getRequestMethod();
         if (method.equals("OPTIONS") && supplied != null
-                && exchange.getRequestHeaders().containsKey("Access-Control-Request-Method")) {
+                && exchange.getRequestHeaders().containsKey("Access-Control-Request-Method"))
+        {
             if (allowed) {
                 exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET,POST");
                 exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
@@ -126,7 +130,10 @@ public final class DictionaryHost
         } else if (path.equals("/demo/dictionary/elements")) {
             requireMethod(method, "GET");
             send(exchange, 200, Map.of("elements", catalog.ids().stream().map(id ->
-                    Map.of("id", id, "type", catalog.resolve(id).descriptor().orElseThrow().type().name())).toList()));
+                                                                                      Map.of("id",
+                                                                                             id,
+                                                                                             "type",
+                                                                                             catalog.resolve(id).descriptor().orElseThrow().type().name())).toList()));
         } else if (path.startsWith(prefix)) {
             String suffix = path.substring(prefix.length());
             boolean validation = suffix.endsWith("/validate");

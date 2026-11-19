@@ -10,36 +10,44 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 
-/** Family differences only; the fixed LIST/GET algorithm is inherited. */
+/**
+ * Family differences only; the fixed LIST/GET algorithm is inherited.
+ */
 public abstract class MySqlRecordReaderBase extends SqlRecordReader
 {
     protected boolean mariaDb;
+
     protected MySqlRecordReaderBase(Connections connections, int timeoutSeconds)
     {
         super(connections, timeoutSeconds);
         identifierStart = "`";
         identifierEnd = "`";
     }
+
     @Override
     protected void beginTransaction(Connection connection) throws SQLException
     {
         MySqlMetadata.begin(connection, timeoutSeconds);
     }
+
     @Override
     protected void initializeSession(Connection connection) throws SQLException
     {
         MySqlMetadata.initialize(connection, timeoutSeconds, mariaDb);
     }
+
     @Override
     protected String limitClause()
     {
         return " LIMIT ?";
     }
+
     @Override
     protected String valueExpression(String column)
     {
         return "CAST(" + column + " AS CHAR CHARACTER SET utf8mb4) AS " + column;
     }
+
     @Override
     protected Object portableValue(ResultSet rows, ReadPlan.Column column) throws SQLException
     {
@@ -53,6 +61,7 @@ public abstract class MySqlRecordReaderBase extends SqlRecordReader
             default -> throw new ReadFailure("ROW_DECODE_FAILED");
         };
     }
+
     @Override
     protected boolean supportsColumn(ReadPlan.Column column, Map<String, Object> physical)
     {
@@ -64,11 +73,13 @@ public abstract class MySqlRecordReaderBase extends SqlRecordReader
                 ? "INT8".equals(physical.get("scalarType")) && nativeType.startsWith("tinyint")
                 : super.supportsColumn(column, physical);
     }
+
     @Override
     protected void acquireReadProtection(Connection connection, SqlSource source) throws SQLException
     {
         MySqlMetadata.protect(connection, timeoutSeconds, source.schema(), source.table());
     }
+
     @Override
     protected Map<String, Object> observePhysical(SqlSource source) throws ObservationException
     {
@@ -76,8 +87,8 @@ public abstract class MySqlRecordReaderBase extends SqlRecordReader
         String provider = (String) facts.get("provider"), id = (String) source.physical().get("id");
         return mariaDb
                 ? new MariaDbObservationProvider(connections, provider, id, source.schema(), source.table(),
-                        timeoutSeconds).observe()
+                                                 timeoutSeconds).observe()
                 : new MySqlObservationProvider(connections, provider, id, source.schema(), source.table(),
-                        timeoutSeconds).observe();
+                                               timeoutSeconds).observe();
     }
 }

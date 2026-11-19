@@ -1,6 +1,7 @@
 package org.alxarafe.arp.dictionary;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -13,12 +14,21 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-/** Application-owned active registry and authorization boundary, independent of JDBC execution. */
+/**
+ * Application-owned active registry and authorization boundary, independent of JDBC execution.
+ */
 public final class ListGetHost
 {
-    /** Binding includes principal/tenant and policy revision; the caller supplies it, never the request. */
-    public record Context(String identity, String policyRevision) {}
-    /** Complete field grant plus equality restrictions; null means an unsupported policy, not unrestricted. */
+    /**
+     * Binding includes principal/tenant and policy revision; the caller supplies it, never the request.
+     */
+    public record Context(String identity, String policyRevision)
+    {
+    }
+
+    /**
+     * Complete field grant plus equality restrictions; null means an unsupported policy, not unrestricted.
+     */
     public record Access(boolean allowed, Set<String> fields, Map<String, Object> equalities)
     {
         public Access
@@ -27,11 +37,13 @@ public final class ListGetHost
             equalities = equalities == null ? null : Map.copyOf(equalities);
         }
     }
+
     @FunctionalInterface
     public interface Authorizer
     {
         Access authorize(String target, String operation, Context context);
     }
+
     public record Target(String projection, int defaultLimit, int maxLimit, Set<String> fields)
     {
         public Target
@@ -42,11 +54,17 @@ public final class ListGetHost
             }
         }
     }
+
     private static final class Fault extends RuntimeException
     {
         final String code;
-        Fault(String code) { this.code = code; }
+
+        Fault(String code)
+        {
+            this.code = code;
+        }
     }
+
     private final ReadCatalog catalog;
     private final RecordReader reader;
     private final Authorizer authorizer;
@@ -57,8 +75,9 @@ public final class ListGetHost
     private final byte[] secret = new byte[32];
     private final ObjectMapper json = JsonSupport.reader(new Limits(1_048_576, 2048, 64));
 
-    public ListGetHost(ReadCatalog catalog, RecordReader reader,
-                       Map<String, Target> active, Authorizer authorizer)
+    public ListGetHost(
+            ReadCatalog catalog, RecordReader reader,
+            Map<String, Target> active, Authorizer authorizer)
     {
         this.catalog = catalog;
         this.reader = reader;
@@ -66,7 +85,10 @@ public final class ListGetHost
         this.authorizer = authorizer;
         random.nextBytes(secret);
     }
-    /** The application must serialize every policy/composition mutation here, including ABA changes. */
+
+    /**
+     * The application must serialize every policy/composition mutation here, including ABA changes.
+     */
     public void changeAccess(Map<String, Target> replacement, Runnable policyMutation)
     {
         synchronized (gate) {
@@ -75,43 +97,59 @@ public final class ListGetHost
             policyMutation.run();
         }
     }
+
     private static void need(boolean condition, String code)
     {
-        if (!condition) { throw new Fault(code); }
+        if (!condition) {
+            throw new Fault(code);
+        }
     }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> map(Object value)
     {
         need(value instanceof Map<?, ?>, "INPUT_SHAPE");
         return (Map<String, Object>) value;
     }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> objects(Object value)
     {
         return (List<Map<String, Object>>) value;
     }
+
     private static Map<String, Object> find(Object list, String id)
     {
         return objects(list).stream().filter(v -> id.equals(v.get("id"))).findFirst()
                 .orElseThrow(() -> new Fault("CAPABILITY_UNAVAILABLE"));
     }
+
     private Access access(String target, String operation, Context context, List<String> fields)
     {
         var decision = authorizer.authorize(target, operation, context);
         need(decision != null && decision.allowed() && decision.fields().containsAll(fields), "UNAVAILABLE");
         return decision;
     }
-    /** Strict portable JSON decoding (duplicate members, Unicode, exact numbers and budgets included). */
+
+    /**
+     * Strict portable JSON decoding (duplicate members, Unicode, exact numbers and budgets included).
+     */
     public Map<String, Object> invoke(byte[] request, Context context)
     {
         try {
-            if (request.length > 1_048_576) { throw new Fault("INPUT_SHAPE"); }
+            if (request.length > 1_048_576) {
+                throw new Fault("INPUT_SHAPE");
+            }
             var decoded = json.readValue(request, Object.class);
             JsonSupport.unicode(decoded);
             return invokeDecoded(map(decoded), context);
-        } catch (Fault e) { return failure(e.code); }
-        catch (Exception e) { return failure("INPUT_SHAPE"); }
+        } catch (Fault e) {
+            return failure(e.code);
+        } catch (Exception e) {
+            return failure("INPUT_SHAPE");
+        }
     }
+
     private Map<String, Object> invokeDecoded(Map<String, Object> request, Context context)
     {
         try {
@@ -149,9 +187,18 @@ public final class ListGetHost
             // Seven signed integer components fit the unchanged contractual 128-character token budget.
             need(!keys.isEmpty() && keys.size() <= 7, "CAPABILITY_UNAVAILABLE");
             long generation = catalog.publishRead(snapshot, catalog::generation);
-            var binding = Map.<String, Object>of("target", target, "projection", registration.projection(),
-                    "identity", context.identity(), "policy", context.policyRevision(),
-                    "accessEpoch", Long.toString(epoch), "generation", Long.toString(generation));
+            var binding = Map.<String, Object>of("target",
+                                                 target,
+                                                 "projection",
+                                                 registration.projection(),
+                                                 "identity",
+                                                 context.identity(),
+                                                 "policy",
+                                                 context.policyRevision(),
+                                                 "accessEpoch",
+                                                 Long.toString(epoch),
+                                                 "generation",
+                                                 Long.toString(generation));
             var inputs = map(request.get("inputs"));
             boolean get = operation.equals("GET"), opaque = !fieldNames.containsAll(keys);
             int limit = registration.defaultLimit();
@@ -163,15 +210,18 @@ public final class ListGetHost
                 var key = map(inputs.get("key"));
                 if (opaque) {
                     need(key.keySet().equals(Set.of("reference")) && key.get("reference") instanceof String,
-                            "INVALID_KEY");
+                         "INVALID_KEY");
                     String reference = (String) key.get("reference");
                     need(!reference.isEmpty() && reference.length() <= 128, "INVALID_KEY");
                     var decoded = open(reference, binding, "GET");
-                    if (decoded == null) { absent = true; }
-                    else { position = tokenPosition(decoded); }
+                    if (decoded == null) {
+                        absent = true;
+                    } else {
+                        position = tokenPosition(decoded);
+                    }
                 } else {
                     need(key.keySet().equals(Set.of("components")) && key.get("components") instanceof List<?>,
-                            "INVALID_KEY");
+                         "INVALID_KEY");
                     var components = (List<?>) key.get("components");
                     need(components.size() == keys.size(), "INVALID_KEY");
                     position = new ArrayList<>();
@@ -179,8 +229,8 @@ public final class ListGetHost
                         need(components.get(i) instanceof Map<?, ?>, "INVALID_KEY");
                         var c = map(components.get(i));
                         need(c.keySet().equals(Set.of("field", "type", "value"))
-                                && keys.get(i).equals(c.get("field"))
-                                && keyTypes.get(i).name().equals(c.get("type")), "INVALID_KEY");
+                                     && keys.get(i).equals(c.get("field"))
+                                     && keyTypes.get(i).name().equals(c.get("type")), "INVALID_KEY");
                         var decoded = ScalarValidator.read(keyTypes.get(i), c.get("value"));
                         need(decoded.valid(), "INVALID_KEY");
                         position.add((String) decoded.normalizedValue().orElseThrow());
@@ -193,7 +243,7 @@ public final class ListGetHost
                     need(Numbers.integral(value), "INPUT_SHAPE");
                     var n = Numbers.metadata(value);
                     need(n.compareTo(BigDecimal.ONE) >= 0 && n.compareTo(BigDecimal.valueOf(100)) <= 0,
-                            "INPUT_SHAPE");
+                         "INPUT_SHAPE");
                     limit = Math.min(n.intValueExact(), registration.maxLimit());
                 }
                 if (inputs.containsKey("continuation")) {
@@ -206,45 +256,53 @@ public final class ListGetHost
             final int effectiveLimit = limit;
             java.util.function.BiFunction<List<ReadPlan.Row>, ReadAttempt, Map<String, Object>> publish =
                     (rows, attempt) -> {
-                // Validate even internal/hidden PKs before any row or token may escape.
-                for (var row : rows) {
-                    for (int i = 0; i < keys.size(); i++) {
-                        need(ScalarValidator.read(keyTypes.get(i), row.key().get(i)).valid(), "ROW_IDENTITY_INVALID");
-                    }
-                }
-                synchronized (gate) {
-                    need(registration.equals(active.get(target)), "GENERATION_CHANGED");
-                    var finalAccess = access(target, operation, context, fieldNames);
-                    need(initial.equals(finalAccess), "UNAVAILABLE");
-                    need(policyGeneration == epoch, "GENERATION_CHANGED");
-                    return catalog.publishRead(snapshot, () -> {
-                        Map<String, Object> response;
-                        if (get) {
-                            need(rows.size() <= 1, "ROW_IDENTITY_INVALID");
-                            response = success(rows.isEmpty() ? Map.of("found", false)
-                                    : Map.of("found", true, "record",
-                                            record(rows.getFirst(), keys, keyTypes, opaque, binding)));
-                        } else {
-                            boolean more = rows.size() > effectiveLimit;
-                            var visible = rows.subList(0, Math.min(effectiveLimit, rows.size()));
-                            var records = visible.stream()
-                                    .map(r -> record(r, keys, keyTypes, opaque, binding)).toList();
-                            var page = new LinkedHashMap<String, Object>();
-                            page.put("limit", effectiveLimit); page.put("hasMore", more);
-                            page.put("next", more
-                                    ? seal(binding, "LIST", visible.getLast().key(), effectiveLimit) : null);
-                            response = success(Map.of("records", records, "page", page));
+                        // Validate even internal/hidden PKs before any row or token may escape.
+                        for (var row : rows) {
+                            for (int i = 0; i < keys.size(); i++) {
+                                need(ScalarValidator.read(keyTypes.get(i), row.key().get(i)).valid(),
+                                     "ROW_IDENTITY_INVALID");
+                            }
                         }
-                        if (attempt != null) { attempt.complete(); }
-                        // Commit can reenter local policy/catalog mutation through a driver callback.
-                        need(registration.equals(active.get(target)), "GENERATION_CHANGED");
-                        need(initial.equals(access(target, operation, context, fieldNames)), "UNAVAILABLE");
-                        need(policyGeneration == epoch, "GENERATION_CHANGED");
-                        need(catalog.current().orElse(null) == snapshot, "GENERATION_CHANGED");
-                        return response;
-                    });
-                }
-            };
+                        synchronized (gate) {
+                            need(registration.equals(active.get(target)), "GENERATION_CHANGED");
+                            var finalAccess = access(target, operation, context, fieldNames);
+                            need(initial.equals(finalAccess), "UNAVAILABLE");
+                            need(policyGeneration == epoch, "GENERATION_CHANGED");
+                            return catalog.publishRead(snapshot, () -> {
+                                Map<String, Object> response;
+                                if (get) {
+                                    need(rows.size() <= 1, "ROW_IDENTITY_INVALID");
+                                    response = success(rows.isEmpty() ? Map.of("found", false)
+                                                               : Map.of("found", true, "record",
+                                                                        record(rows.getFirst(),
+                                                                               keys,
+                                                                               keyTypes,
+                                                                               opaque,
+                                                                               binding)));
+                                } else {
+                                    boolean more = rows.size() > effectiveLimit;
+                                    var visible = rows.subList(0, Math.min(effectiveLimit, rows.size()));
+                                    var records = visible.stream()
+                                            .map(r -> record(r, keys, keyTypes, opaque, binding)).toList();
+                                    var page = new LinkedHashMap<String, Object>();
+                                    page.put("limit", effectiveLimit);
+                                    page.put("hasMore", more);
+                                    page.put("next", more
+                                            ? seal(binding, "LIST", visible.getLast().key(), effectiveLimit) : null);
+                                    response = success(Map.of("records", records, "page", page));
+                                }
+                                if (attempt != null) {
+                                    attempt.complete();
+                                }
+                                // Commit can reenter local policy/catalog mutation through a driver callback.
+                                need(registration.equals(active.get(target)), "GENERATION_CHANGED");
+                                need(initial.equals(access(target, operation, context, fieldNames)), "UNAVAILABLE");
+                                need(policyGeneration == epoch, "GENERATION_CHANGED");
+                                need(catalog.current().orElse(null) == snapshot, "GENERATION_CHANGED");
+                                return response;
+                            });
+                        }
+                    };
             java.util.function.BooleanSupplier current = () -> {
                 synchronized (gate) {
                     return policyGeneration == epoch && registration.equals(active.get(target))
@@ -252,21 +310,31 @@ public final class ListGetHost
                             && catalog.current().orElse(null) == snapshot;
                 }
             };
-            if (absent) { return publish.apply(List.of(), null); }
+            if (absent) {
+                return publish.apply(List.of(), null);
+            }
             try (var attempt = reader.open(new ReadPlan(prepared, position, get, limit), current)) {
                 return publish.apply(attempt.rows(), attempt);
             }
-        } catch (Fault e) { return failure(e.code); }
-        catch (ReadFailure e) { return failure(e.code); }
-        catch (IllegalStateException e) { return failure("GENERATION_CHANGED"); }
-        catch (RuntimeException e) { return failure("READ_FAILED"); }
+        } catch (Fault e) {
+            return failure(e.code);
+        } catch (ReadFailure e) {
+            return failure(e.code);
+        } catch (IllegalStateException e) {
+            return failure("GENERATION_CHANGED");
+        } catch (RuntimeException e) {
+            return failure("READ_FAILED");
+        }
     }
-    private Map<String, Object> record(ReadPlan.Row row, List<String> keys,
-                                       List<ScalarType> types, boolean opaque, Map<String, Object> binding)
+
+    private Map<String, Object> record(
+            ReadPlan.Row row, List<String> keys,
+            List<ScalarType> types, boolean opaque, Map<String, Object> binding)
     {
         Object key;
-        if (opaque) { key = Map.of("reference", seal(binding, "GET", row.key(), 0)); }
-        else {
+        if (opaque) {
+            key = Map.of("reference", seal(binding, "GET", row.key(), 0));
+        } else {
             var components = new ArrayList<Object>();
             for (int i = 0; i < keys.size(); i++) {
                 components.add(Map.of("field", keys.get(i), "type", types.get(i).name(), "value", row.key().get(i)));
@@ -275,6 +343,7 @@ public final class ListGetHost
         }
         return Map.of("key", key, "values", row.values());
     }
+
     private byte[] bindingBytes(Map<String, Object> binding, String purpose) throws java.io.IOException
     {
         var associated = new java.util.TreeMap<>(binding);
@@ -282,6 +351,7 @@ public final class ListGetHost
         associated.put("purpose", purpose);
         return json.writeValueAsBytes(associated);
     }
+
     private String seal(Map<String, Object> binding, String purpose, List<String> position, int limit)
     {
         try {
@@ -289,8 +359,11 @@ public final class ListGetHost
             var payload = java.nio.ByteBuffer.allocate(9 + 8 * position.size());
             payload.putLong(Long.parseLong((String) binding.get("generation")));
             payload.put((byte) limit);
-            for (String component : position) { payload.putLong(Long.parseLong(component)); }
-            byte[] nonce = new byte[12]; random.nextBytes(nonce);
+            for (String component : position) {
+                payload.putLong(Long.parseLong(component));
+            }
+            byte[] nonce = new byte[12];
+            random.nextBytes(nonce);
             var cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(secret, "AES"), new GCMParameterSpec(128, nonce));
             cipher.updateAAD(bindingBytes(binding, purpose));
@@ -299,37 +372,51 @@ public final class ListGetHost
             System.arraycopy(nonce, 0, token, 0, nonce.length);
             System.arraycopy(encrypted, 0, token, nonce.length, encrypted.length);
             return Base64.getUrlEncoder().withoutPadding().encodeToString(token);
-        } catch (Exception e) { throw new Fault("READ_FAILED"); }
+        } catch (Exception e) {
+            throw new Fault("READ_FAILED");
+        }
     }
+
     private Map<String, Object> open(String token, Map<String, Object> binding, String purpose)
     {
         java.nio.ByteBuffer payload;
         try {
-            if (token.length() > 128) { return null; }
+            if (token.length() > 128) {
+                return null;
+            }
             byte[] bytes = Base64.getUrlDecoder().decode(token);
             var cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(secret, "AES"),
-                    new GCMParameterSpec(128, bytes, 0, 12));
+                        new GCMParameterSpec(128, bytes, 0, 12));
             cipher.updateAAD(bindingBytes(binding, purpose));
             payload = java.nio.ByteBuffer.wrap(cipher.doFinal(bytes, 12, bytes.length - 12));
-            if (payload.remaining() < 17 || (payload.remaining() - 9) % 8 != 0) { return null; }
-        } catch (Exception e) { return null; }
+            if (payload.remaining() < 17 || (payload.remaining() - 9) % 8 != 0) {
+                return null;
+            }
+        } catch (Exception e) {
+            return null;
+        }
         need(binding.get("generation").equals(Long.toString(payload.getLong())), "GENERATION_EXPIRED");
         String limit = Integer.toString(Byte.toUnsignedInt(payload.get()));
         var position = new ArrayList<String>();
-        while (payload.hasRemaining()) { position.add(Long.toString(payload.getLong())); }
+        while (payload.hasRemaining()) {
+            position.add(Long.toString(payload.getLong()));
+        }
         return Map.of("limit", limit, "position", List.copyOf(position));
     }
+
     @SuppressWarnings("unchecked")
     private static List<String> tokenPosition(Map<String, Object> token)
     {
         return (List<String>) token.get("position");
     }
+
     private static Map<String, Object> success(Map<String, Object> output)
     {
         return java.util.Collections.unmodifiableMap(Map.of("status", "success", "diagnostics", List.of(),
-                "output", CdsReadResult.freeze(output)));
+                                                            "output", CdsReadResult.freeze(output)));
     }
+
     private static Map<String, Object> failure(String code)
     {
         boolean failed = Set.of("READ_FAILED", "ROW_DECODE_FAILED", "ROW_IDENTITY_INVALID", "GENERATION_CHANGED")

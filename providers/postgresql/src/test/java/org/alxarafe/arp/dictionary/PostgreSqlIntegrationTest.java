@@ -1,6 +1,7 @@
 package org.alxarafe.arp.dictionary;
 
 import com.fasterxml.jackson.databind.JsonNode;
+
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.alxarafe.arp.cds.physical.ObservationException;
 import org.alxarafe.arp.cds.physical.PhysicalCatalog;
 import org.alxarafe.arp.cds.physical.PhysicalObservationProvider;
@@ -21,9 +23,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Real DB contract executions are reported separately from the additional engine checks. */
+/**
+ * Real DB contract executions are reported separately from the additional engine checks.
+ */
 @Execution(ExecutionMode.SAME_THREAD)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PostgreSqlIntegrationTest
@@ -52,7 +57,7 @@ class PostgreSqlIntegrationTest
         admin = DriverManager.getConnection(URL, "arpcds", PASSWORD);
         assertEquals("arpcds", scalar("SELECT current_database()"));
         assertEquals(System.getenv("ARP_CDS_RUN_TOKEN"), scalar("SELECT token FROM public.__arp_cds_test_owner"),
-                "Owned run nonce required before DDL");
+                     "Owned run nonce required before DDL");
         exec("CREATE SCHEMA " + SCOPE + "; SET search_path TO " + SCOPE);
         exec("CREATE TABLE sentinel(marker text); INSERT INTO sentinel VALUES ('unchanged')");
         setup = Files.readString(ConformanceTest.ROOT.resolve("examples/demo/sql/postgresql.sql"));
@@ -75,7 +80,8 @@ class PostgreSqlIntegrationTest
         original = JsonSupport.write(definitions);
         physicalId = vector.at("/input/physical/storage/id").asText();
         dictionary = new CatalogBuilder().buildCatalog(List.of(new Source("fixture", "dictionary", Source.Encoding.JSON,
-                Files.readAllBytes(ConformanceTest.ROOT.resolve("fixtures/dictionary/v1/catalog.json")))))
+                                                                          Files.readAllBytes(ConformanceTest.ROOT.resolve(
+                                                                                  "fixtures/dictionary/v1/catalog.json")))))
                 .catalog().orElseThrow();
     }
 
@@ -86,13 +92,16 @@ class PostgreSqlIntegrationTest
 
     private static void exec(String sql) throws SQLException
     {
-        try (var statement = admin.createStatement()) { statement.execute(sql); }
+        try (var statement = admin.createStatement()) {
+            statement.execute(sql);
+        }
     }
 
     private static String scalar(String sql) throws SQLException
     {
         try (var statement = admin.createStatement(); var rows = statement.executeQuery(sql)) {
-            assertTrue(rows.next()); return rows.getString(1);
+            assertTrue(rows.next());
+            return rows.getString(1);
         }
     }
 
@@ -104,7 +113,7 @@ class PostgreSqlIntegrationTest
     private static Counting observer(String table)
     {
         return new Counting(new PostgreSqlObservationProvider(PostgreSqlIntegrationTest::connect,
-                "primary", physicalId, SCOPE, table, 5));
+                                                              "primary", physicalId, SCOPE, table, 5));
     }
 
     private static PhysicalCatalog session(Counting provider)
@@ -149,9 +158,13 @@ class PostgreSqlIntegrationTest
             switch (id) {
                 case "lazy-generation" -> {
                     assertEquals(0, provider.count);
-                    first = catalog.resolve(); assertTrue(first.valid()); assertEquals(1, provider.count);
-                    assertSame(first, catalog.resolve()); assertEquals(1, provider.count);
-                    var result = node(first.projection()); assertions(result, c.get("assert"));
+                    first = catalog.resolve();
+                    assertTrue(first.valid());
+                    assertEquals(1, provider.count);
+                    assertSame(first, catalog.resolve());
+                    assertEquals(1, provider.count);
+                    var result = node(first.projection());
+                    assertions(result, c.get("assert"));
                     ConformanceTest.assertJson(vector.at("/expected/projections"), result.get("projections"));
                     var physical = result.at("/models/0/physical");
                     var facts = engine.get("observedFacts");
@@ -169,37 +182,49 @@ class PostgreSqlIntegrationTest
                     }
                     ConformanceTest.assertJson(facts.get("primaryKey"), physical.get("primaryKey"));
                     ConformanceTest.assertJson(facts.get("rating.integerRange"),
-                        physical.at("/columns/2/integerRange"));
+                                               physical.at("/columns/2/integerRange"));
                     ConformanceTest.assertJson(facts.get("code.characterLength"),
-                        physical.at("/columns/1/characterLength"));
+                                               physical.at("/columns/1/characterLength"));
                     assertEquals("compatible", result.at("/models/0/fields/2/compatibility").asText());
                 }
                 case "add-column-and-invalidate" -> {
                     exec(c.get("ddl").asText());
-                    assertSame(first, catalog.resolve()); assertEquals(1, provider.count);
-                    catalog.invalidate(); assertTrue(catalog.current().isEmpty()); assertEquals(1, provider.count);
-                    var result = catalog.resolve(); assertTrue(result.valid()); assertEquals(2, provider.count);
+                    assertSame(first, catalog.resolve());
+                    assertEquals(1, provider.count);
+                    catalog.invalidate();
+                    assertTrue(catalog.current().isEmpty());
+                    assertEquals(1, provider.count);
+                    var result = catalog.resolve();
+                    assertTrue(result.valid());
+                    assertEquals(2, provider.count);
                     assertions(node(result.projection()), c.get("assert"));
                     ConformanceTest.assertJson(node(first.projection()).get("projections"),
-                            node(result.projection()).get("projections"));
+                                               node(result.projection()).get("projections"));
                 }
                 case "remove-specialized-column-and-invalidate" -> {
-                    exec(c.get("ddl").asText()); catalog.invalidate();
+                    exec(c.get("ddl").asText());
+                    catalog.invalidate();
                     ConformanceTest.compare(catalog.resolve().projection(), c.get("expected"), false);
-                    assertTrue(catalog.current().isEmpty()); assertEquals(original, JsonSupport.write(definitions));
+                    assertTrue(catalog.current().isEmpty());
+                    assertEquals(original, JsonSupport.write(definitions));
                 }
                 case "observation-fails-after-invalidation" -> {
-                    OFFLINE.set(true); catalog.invalidate();
+                    OFFLINE.set(true);
+                    catalog.invalidate();
                     ConformanceTest.compare(catalog.resolve().projection(), c.get("expected"), false);
-                    assertTrue(catalog.current().isEmpty()); OFFLINE.set(false);
+                    assertTrue(catalog.current().isEmpty());
+                    OFFLINE.set(false);
                 }
                 case "invalidation-during-generation" -> {
-                    exec("DROP TABLE items"); exec(setup);
+                    exec("DROP TABLE items");
+                    exec(setup);
                     var changing = new PhysicalCatalog[1];
                     var delayed = observer("items");
-                    delayed.after = () -> changing[0].invalidate(); changing[0] = session(delayed);
+                    delayed.after = () -> changing[0].invalidate();
+                    changing[0] = session(delayed);
                     ConformanceTest.compare(changing[0].resolve().projection(), c.get("expected"), false);
-                    assertTrue(changing[0].current().isEmpty()); assertEquals(1, delayed.count);
+                    assertTrue(changing[0].current().isEmpty());
+                    assertEquals(1, delayed.count);
                 }
                 default -> fail("Unexecuted contractual database scenario: " + id);
             }
@@ -213,8 +238,8 @@ class PostgreSqlIntegrationTest
     void additionalIntegration() throws Exception
     {
         exec("CREATE TABLE parent(a int,b int,PRIMARY KEY(a,b)); CREATE TABLE keys_table(a int,b int,"
-                + "note varchar(12),PRIMARY KEY(a,b),CONSTRAINT fk_pair FOREIGN KEY(a,b) REFERENCES parent(a,b));"
-                + "CREATE INDEX ix_note ON keys_table(note)");
+                     + "note varchar(12),PRIMARY KEY(a,b),CONSTRAINT fk_pair FOREIGN KEY(a,b) REFERENCES parent(a,b));"
+                     + "CREATE INDEX ix_note ON keys_table(note)");
         var keys = node(observer("keys_table").observe());
         ConformanceTest.assertJson(ConformanceTest.JSON.readTree("[\"a\",\"b\"]"), keys.get("primaryKey"));
         ConformanceTest.assertJson(keys.get("primaryKey"), keys.at("/foreignKeys/0/columns"));
@@ -225,11 +250,12 @@ class PostgreSqlIntegrationTest
         assertFalse(node(observer("keys_table").observe()).has("indexes"));
         ADDITIONAL.add("unrepresentable-index-presence");
         exec("CREATE DOMAIN local_int AS integer NOT NULL; CREATE TABLE types_test(opaque jsonb, custom local_int,"
-                + "large bigint, generated integer GENERATED ALWAYS AS (1) STORED,"
-                + "ident integer GENERATED ALWAYS AS IDENTITY)");
+                     + "large bigint, generated integer GENERATED ALWAYS AS (1) STORED,"
+                     + "ident integer GENERATED ALWAYS AS IDENTITY)");
         var types = node(observer("types_test").observe());
         assertFalse(types.at("/columns/0").has("scalarType"));
-        assertFalse(types.at("/columns/1").has("scalarType")); assertFalse(types.at("/columns/1").has("nullable"));
+        assertFalse(types.at("/columns/1").has("scalarType"));
+        assertFalse(types.at("/columns/1").has("nullable"));
         assertEquals("9223372036854775807", types.at("/columns/2/integerRange/maximum").asText());
         assertTrue(types.at("/columns/3/generated").asBoolean());
         assertTrue(types.at("/columns/4/identity").asBoolean());
@@ -242,42 +268,47 @@ class PostgreSqlIntegrationTest
                 "apiVersion", "arp.logical/v1", "id", "demo.checked", "physical", physicalId,
                 "fields", Map.of("value", Map.of("dictionary", "test.int16")))), "projections", Map.of());
         var checkedCatalog = new PhysicalCatalog(dictionary, checkedDefinitions, Map.of("storage",
-            observer("checked")));
+                                                                                        observer("checked")));
         assertEquals("not-verified", node(checkedCatalog.resolve().projection())
                 .at("/models/0/fields/0/compatibility").asText());
         ADDITIONAL.add("native-check-no-false-compatibility");
 
-        exec("CREATE TABLE \"Odd.Table\"(id int)"); assertEquals(1,
-            node(observer("Odd.Table").observe()).get("columns").size());
+        exec("CREATE TABLE \"Odd.Table\"(id int)");
+        assertEquals(1,
+                     node(observer("Odd.Table").observe()).get("columns").size());
         ADDITIONAL.add("literal-physical-identifiers");
         exec("CREATE ROLE limited LOGIN PASSWORD '" + PASSWORD + "'; GRANT USAGE ON SCHEMA arp_scope TO limited;"
-                + "GRANT SELECT(id) ON items TO limited");
+                     + "GRANT SELECT(id) ON items TO limited");
         try (var limited = DriverManager.getConnection(URL, "limited", PASSWORD);
-        var s = limited.createStatement();
-        var rs = s.executeQuery("SELECT count(*) FROM information_schema.columns WHERE"
-        + " table_schema='arp_scope' AND table_name='items'")) {
-            assertTrue(rs.next()); assertEquals(1, rs.getInt(1), "Real column-level metadata visibility");
+             var s = limited.createStatement();
+             var rs = s.executeQuery("SELECT count(*) FROM information_schema.columns WHERE"
+                                             + " table_schema='arp_scope' AND table_name='items'"))
+        {
+            assertTrue(rs.next());
+            assertEquals(1, rs.getInt(1), "Real column-level metadata visibility");
         }
         var denied = new Counting(new PostgreSqlObservationProvider(
                 () -> DriverManager.getConnection(URL, "limited", PASSWORD), "primary", physicalId, SCOPE, "items", 5));
         assertEquals(CdsReadResult.failure("OBSERVATION_FAILED", "/providers/primary",
-            "execution-failure").projection(),
-                session(denied).resolve().projection());
+                                           "execution-failure").projection(),
+                     session(denied).resolve().projection());
         ADDITIONAL.add("permissions-incomplete-metadata-no-partial-publication");
         exec("CREATE VIEW view_test AS SELECT id FROM items");
         for (String name : List.of("missing_table", "view_test")) {
             assertThrows(ObservationException.class, () -> observer(name).observe());
         }
-        assertEquals("unchanged", scalar("SELECT marker FROM sentinel")); assertEquals("0",
-            scalar("SELECT count(*) FROM items"));
+        assertEquals("unchanged", scalar("SELECT marker FROM sentinel"));
+        assertEquals("0",
+                     scalar("SELECT count(*) FROM items"));
         ADDITIONAL.add("missing-view-readonly-and-sentinel-preservation");
         var goodObserver = observer("items");
         var atomic = new PhysicalCatalog(dictionary, definitions,
-                Map.of("storage", goodObserver, "zz", observer("missing_table")));
+                                         Map.of("storage", goodObserver, "zz", observer("missing_table")));
         assertEquals(CdsReadResult.failure("OBSERVATION_FAILED", "/providers/primary",
-            "execution-failure").projection(),
-                atomic.resolve().projection());
-        assertTrue(atomic.current().isEmpty()); assertEquals(1, goodObserver.count);
+                                           "execution-failure").projection(),
+                     atomic.resolve().projection());
+        assertTrue(atomic.current().isEmpty());
+        assertEquals(1, goodObserver.count);
         ADDITIONAL.add("multi-provider-no-partial-publication");
         var narrowInput = vector.get("input").deepCopy();
         ((com.fasterxml.jackson.databind.node.ObjectNode) narrowInput.at("/logical/model/fields"))
@@ -286,12 +317,14 @@ class PostgreSqlIntegrationTest
         var narrowDefinitions = (Map<String, Object>) ConformanceTest.JSON.convertValue(narrowInput, Object.class);
         String authored = JsonSupport.write(narrowDefinitions);
         var narrowed = new PhysicalCatalog(dictionary, narrowDefinitions, Map.of("storage", observer("items")));
-        var beforeNarrowing = narrowed.resolve(); assertTrue(beforeNarrowing.valid());
+        var beforeNarrowing = narrowed.resolve();
+        assertTrue(beforeNarrowing.valid());
         exec("DROP VIEW view_test; ALTER TABLE items ALTER COLUMN id TYPE smallint");
         narrowed.invalidate();
         assertEquals(CdsReadResult.failure("DOMAIN_NOT_REPRESENTABLE", "/logical/model/fields/id",
-                "physical-incompatible").projection(), narrowed.resolve().projection());
-        assertTrue(narrowed.current().isEmpty()); assertEquals(authored, JsonSupport.write(narrowDefinitions));
+                                           "physical-incompatible").projection(), narrowed.resolve().projection());
+        assertTrue(narrowed.current().isEmpty());
+        assertEquals(authored, JsonSupport.write(narrowDefinitions));
         assertEquals(original, JsonSupport.write(definitions));
         assertEquals("INT32", node(beforeNarrowing.projection()).at("/models/0/fields/1/physical/scalarType").asText());
         ADDITIONAL.add("real-narrowing-incompatible");
@@ -303,9 +336,16 @@ class PostgreSqlIntegrationTest
     static void report() throws Exception
     {
         if (admin != null) {
-            System.out.println(JsonSupport.write(Map.of("stack", "java", "contractCases", CONTRACT,
-                    "additionalCases", ADDITIONAL, "engineVersion", scalar("SHOW server_version"),
-                    "contractSha", ConformanceTest.SHA)));
+            System.out.println(JsonSupport.write(Map.of("stack",
+                                                        "java",
+                                                        "contractCases",
+                                                        CONTRACT,
+                                                        "additionalCases",
+                                                        ADDITIONAL,
+                                                        "engineVersion",
+                                                        scalar("SHOW server_version"),
+                                                        "contractSha",
+                                                        ConformanceTest.SHA)));
             admin.close();
         }
     }
@@ -315,13 +355,25 @@ class PostgreSqlIntegrationTest
         private final PhysicalObservationProvider inner;
         int count;
         Runnable after;
-        Counting(PhysicalObservationProvider inner) { this.inner = inner; }
-        public String providerId() { return inner.providerId(); }
+
+        Counting(PhysicalObservationProvider inner)
+        {
+            this.inner = inner;
+        }
+
+        public String providerId()
+        {
+            return inner.providerId();
+        }
+
         public Map<String, Object> observe() throws ObservationException
         {
-            count++; var result = inner.observe(); if (after != null) {
+            count++;
+            var result = inner.observe();
+            if (after != null) {
                 after.run();
-            } return result;
+            }
+            return result;
         }
     }
 }
