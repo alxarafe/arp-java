@@ -9,12 +9,10 @@ import java.util.List;
  */
 final class PortablePattern
 {
-    private record Atom(BitSet characters, int minimum, int maximum)
-    {
+    private record Atom(BitSet characters, int minimum, int maximum) {
     }
 
-    private record Member(char character, boolean rawHyphen)
-    {
+    private record Member(char character, boolean rawHyphen) {
     }
 
     private final List<Atom> atoms;
@@ -70,7 +68,7 @@ final class PortablePattern
                 if (!members.isEmpty() && members.getLast().rawHyphen()) {
                     characters.set(members.removeLast().character());
                 }
-                for (int j = 0; j < members.size(); ) {
+                for (int j = 0; j < members.size();) {
                     var low = members.get(j);
                     if (low.rawHyphen()) {
                         throw Rejected.element();

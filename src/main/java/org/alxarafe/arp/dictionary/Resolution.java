@@ -4,10 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public record Resolution(Optional<Descriptor> descriptor, List<Issue> issues)
-{
-    public Resolution
-    {
+public record Resolution(Optional<Descriptor> descriptor, List<Issue> issues) {
+    public Resolution {
         descriptor = java.util.Objects.requireNonNull(descriptor);
         issues = List.copyOf(issues);
         if (descriptor.isPresent() == !issues.isEmpty()) {

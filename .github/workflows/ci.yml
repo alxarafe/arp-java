@@ -1,0 +1,31 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: alxarafe/arp-contract
+          path: arp-contract
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the pinned contract revision
+        run: git -C arp-contract checkout --detach "$(cat contract.ref)"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Check formatting
+        run: mvn -B spotless:check
+      - name: Build and test
+        run: mvn -B -Darp.contract.path="$GITHUB_WORKSPACE/arp-contract" verify

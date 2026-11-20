@@ -52,14 +52,13 @@ public class PostgreSqlRecordReader extends SqlRecordReader
         try (var lock = connection.createStatement()) {
             lock.setQueryTimeout(timeoutSeconds);
             lock.execute("LOCK TABLE " + quote(source.schema()) + "." + quote(source.table())
-                                 + " IN ACCESS SHARE MODE");
+                    + " IN ACCESS SHARE MODE");
         }
         try (var check = connection.prepareStatement(
                 "SELECT c.relkind = 'r' AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_inherits i "
                         + "WHERE i.inhparent = c.oid OR i.inhrelid = c.oid) FROM pg_catalog.pg_class c "
                         + "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
-                        + "WHERE n.nspname = ? AND c.relname = ?"))
-        {
+                        + "WHERE n.nspname = ? AND c.relname = ?")) {
             check.setQueryTimeout(timeoutSeconds);
             check.setString(1, source.schema());
             check.setString(2, source.table());
@@ -74,12 +73,13 @@ public class PostgreSqlRecordReader extends SqlRecordReader
     @Override
     protected Map<String, Object> observePhysical(SqlSource source) throws ObservationException
     {
-        @SuppressWarnings("unchecked") var facts = (Map<String, Object>) source.physical().get("source");
+        @SuppressWarnings("unchecked")
+        var facts = (Map<String, Object>) source.physical().get("source");
         return new PostgreSqlObservationProvider(connections::open,
-                                                 (String) facts.get("provider"),
-                                                 (String) source.physical().get("id"),
-                                                 source.schema(),
-                                                 source.table(),
-                                                 timeoutSeconds).observe();
+                (String) facts.get("provider"),
+                (String) source.physical().get("id"),
+                source.schema(),
+                source.table(),
+                timeoutSeconds).observe();
     }
 }

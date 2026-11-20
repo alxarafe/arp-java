@@ -4,10 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public record BuildResult(Optional<Catalog> catalog, List<Issue> issues)
-{
-    public BuildResult
-    {
+public record BuildResult(Optional<Catalog> catalog, List<Issue> issues) {
+    public BuildResult {
         catalog = java.util.Objects.requireNonNull(catalog);
         issues = List.copyOf(issues);
         if (catalog.isPresent() == !issues.isEmpty()) {

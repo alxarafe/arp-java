@@ -20,7 +20,7 @@ class ReadHostTest
     {
         private final CdsReadResult snapshot = new CdsReadResult(Map.of("valid", true, "projections", List.of(
                 Map.of("id", "public", "operations", List.of("LIST", "GET"),
-                       "fields", List.of(Map.of("name", "sku"))))));
+                        "fields", List.of(Map.of("name", "sku"))))));
         private boolean current = true;
 
         public CdsReadResult resolve()
@@ -57,8 +57,7 @@ class ReadHostTest
         public ReadPlan.Prepared prepare(CdsReadResult snapshot, String projection, Map<String, Object> equalities)
         {
             return new ReadPlan.Prepared(List.of(new ReadPlan.Column("sku", ScalarType.STRING, false)),
-                                         List.of(new ReadPlan.Column("id", ScalarType.INT64, false)), equalities)
-            {
+                    List.of(new ReadPlan.Column("id", ScalarType.INT64, false)), equalities) {
             };
         }
 
@@ -66,8 +65,7 @@ class ReadHostTest
         {
             assertTrue(current.getAsBoolean());
             events.add("open");
-            return new ReadAttempt()
-            {
+            return new ReadAttempt() {
                 public List<ReadPlan.Row> rows()
                 {
                     return List.of(new ReadPlan.Row(List.of("1"), Map.of("sku", "item")));
@@ -94,17 +92,17 @@ class ReadHostTest
     private static final byte[] LIST = "{\"target\":\"catalog\",\"operation\":\"LIST\",\"inputs\":{}}".getBytes(
             java.nio.charset.StandardCharsets.UTF_8);
     private static final Map<String, ListGetHost.Target> ACTIVE = Map.of("catalog",
-                                                                         new ListGetHost.Target("public",
-                                                                                                2,
-                                                                                                3,
-                                                                                                Set.of("sku")));
+            new ListGetHost.Target("public",
+                    2,
+                    3,
+                    Set.of("sku")));
 
     private static ListGetHost host(
             CatalogPort catalog, MemoryReader reader,
             java.util.concurrent.atomic.AtomicBoolean allow)
     {
-        return new ListGetHost(catalog, reader, ACTIVE, (_, _, _) ->
-                new ListGetHost.Access(allow.get(), Set.of("sku"), Map.of()));
+        return new ListGetHost(catalog, reader, ACTIVE,
+                (_, _, _) -> new ListGetHost.Access(allow.get(), Set.of("sku"), Map.of()));
     }
 
     private static void failure(Map<String, Object> response, String code)

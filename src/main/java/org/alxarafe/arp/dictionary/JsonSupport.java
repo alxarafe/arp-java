@@ -23,9 +23,10 @@ final class JsonSupport
         var factory = JsonFactory.builder()
                 .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
                 .streamReadConstraints(StreamReadConstraints.builder()
-                                               .maxNestingDepth(limits.maxNestingDepth())
-                                               .maxStringLength(limits.maxDocumentBytes())
-                                               .maxNumberLength(limits.maxDocumentBytes()).build()).build();
+                        .maxNestingDepth(limits.maxNestingDepth())
+                        .maxStringLength(limits.maxDocumentBytes())
+                        .maxNumberLength(limits.maxDocumentBytes()).build())
+                .build();
         return new ObjectMapper(factory)
                 .enable(DeserializationFeature.USE_BIG_INTEGER_FOR_INTS)
                 .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)

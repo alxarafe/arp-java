@@ -12,19 +12,19 @@ final class Numbers
     private static final Pattern DECIMAL = Pattern.compile("-?(0|[1-9][0-9]*)(\\.[0-9]+)?");
     private static final Map<ScalarType, String[]> RANGES = Map.of(
             ScalarType.INT8,
-            new String[]{"-128", "127"},
+            new String[] { "-128", "127" },
             ScalarType.UINT8,
-            new String[]{"0", "255"},
+            new String[] { "0", "255" },
             ScalarType.INT16,
-            new String[]{"-32768", "32767"},
+            new String[] { "-32768", "32767" },
             ScalarType.UINT16,
-            new String[]{"0", "65535"},
+            new String[] { "0", "65535" },
             ScalarType.INT32,
-            new String[]{"-2147483648", "2147483647"},
+            new String[] { "-2147483648", "2147483647" },
             ScalarType.UINT32,
-            new String[]{"0", "4294967295"},
+            new String[] { "0", "4294967295" },
             ScalarType.INT64,
-            new String[]{"-9223372036854775808", "9223372036854775807"});
+            new String[] { "-9223372036854775808", "9223372036854775807" });
 
     static String[] integerRange(ScalarType type)
     {
@@ -56,7 +56,8 @@ final class Numbers
     static boolean inRange(BigDecimal value, ScalarType type)
     {
         String[] range = RANGES.get(type);
-        return range == null || value.compareTo(new BigDecimal(range[0])) >= 0 && value.compareTo(new BigDecimal(range[1])) <= 0;
+        return range == null
+                || value.compareTo(new BigDecimal(range[0])) >= 0 && value.compareTo(new BigDecimal(range[1])) <= 0;
     }
 
     static boolean integral(Object value)

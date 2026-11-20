@@ -9,7 +9,9 @@ import java.util.Objects;
 public final class Source
 {
     public enum Encoding
-    {JSON, YAML}
+    {
+        JSON, YAML
+    }
 
     private final String providerId;
     private final String sourceId;

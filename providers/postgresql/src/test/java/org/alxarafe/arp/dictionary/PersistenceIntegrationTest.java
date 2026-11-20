@@ -57,24 +57,24 @@ class PersistenceIntegrationTest
         String url = "jdbc:postgresql://db:5432/arpcds?connectTimeout=3&socketTimeout=5";
         try (var admin = DriverManager.getConnection(url, "arpcds", password)) {
             try (var c = admin.createStatement();
-                 var r = c.executeQuery("SELECT token FROM public.__arp_cds_test_owner"))
-            {
+                    var r = c.executeQuery("SELECT token FROM public.__arp_cds_test_owner")) {
                 assertTrue(r.next());
                 assertEquals(System.getenv("ARP_CDS_RUN_TOKEN"), r.getString(1));
             }
             if (phase.equals("seed")) {
                 try (var c = admin.createStatement()) {
                     c.execute("CREATE SCHEMA persist_scope; CREATE TABLE persist_scope.persisted_items "
-                                      + "(id INTEGER PRIMARY KEY, code VARCHAR(12) NOT NULL, rating SMALLINT NOT NULL)");
+                            + "(id INTEGER PRIMARY KEY, code VARCHAR(12) NOT NULL, rating SMALLINT NOT NULL)");
                 }
             }
             var key = new PhysicalStoreKey("tests", "db-main", "primary", "storage.items", "postgresql",
-                                           "persist_scope", "persisted_items");
+                    "persist_scope", "persisted_items");
             var store = new FilePhysicalStore(directory, List.of(Path.of("/work"), root));
             var offline = new java.util.concurrent.atomic.AtomicBoolean();
             var counted = new Counted(new PostgreSqlObservationProvider(
                     () -> DriverManager.getConnection(offline.get() ? url.replace(":5432/", ":1/") : url,
-                                                      "arpcds", password), "primary", key.physicalId(),
+                            "arpcds", password),
+                    "primary", key.physicalId(),
                     key.schema(), key.table(), 10));
             var cases = ConformanceTest.read(root.resolve("fixtures/cds/read/v1/cases.json")).get("cases");
             Map<String, Object> definitions = null;
@@ -86,15 +86,15 @@ class PersistenceIntegrationTest
             assertNotNull(definitions);
             String original = JsonSupport.write(definitions);
             var dictionary = new CatalogBuilder().buildCatalog(List.of(new Source("fixture",
-                                                                                  "dictionary",
-                                                                                  Source.Encoding.JSON,
-                                                                                  Files.readAllBytes(root.resolve(
-                                                                                          "fixtures/dictionary/v1/catalog.json")))))
+                    "dictionary",
+                    Source.Encoding.JSON,
+                    Files.readAllBytes(root.resolve(
+                            "fixtures/dictionary/v1/catalog.json")))))
                     .catalog().orElseThrow();
             var defs = definitions;
-            java.util.function.Function<PhysicalStoreKey, PhysicalCatalog> catalogFor = k ->
-                    new PhysicalCatalog(dictionary, defs,
-                                        Map.of("storage", new PersistedPhysicalProvider(counted, store, k)));
+            java.util.function.Function<PhysicalStoreKey, PhysicalCatalog> catalogFor = k -> new PhysicalCatalog(
+                    dictionary, defs,
+                    Map.of("storage", new PersistedPhysicalProvider(counted, store, k)));
             var catalog = catalogFor.apply(key);
             Path path = store.fileFor(key);
             assertEquals(0, counted.count);
@@ -113,10 +113,11 @@ class PersistenceIntegrationTest
             assertEquals(1, counted.count);
             var reopened = new FilePhysicalStore(directory, List.of(Path.of("/work"), root));
             assertTrue(new PhysicalCatalog(dictionary, defs,
-                                           Map.of("storage",
-                                                  new PersistedPhysicalProvider(counted,
-                                                                                reopened,
-                                                                                key))).resolve().valid());
+                    Map.of("storage",
+                            new PersistedPhysicalProvider(counted,
+                                    reopened,
+                                    key)))
+                    .resolve().valid());
             assertEquals(1, counted.count);
             groups.add("lazy-cache-and-restart");
             byte[] first = Files.readAllBytes(path);
@@ -125,16 +126,16 @@ class PersistenceIntegrationTest
             assertArrayEquals(first, PhysicalYaml.encode(counted.observe(), key));
             groups.add("deterministic-semantic-roundtrip");
             for (var k : List.of(new PhysicalStoreKey("other", "db-main", "primary", key.physicalId(), key.dialect(),
-                                                      key.schema(), key.table()),
-                                 new PhysicalStoreKey("tests", "other-db", "primary", key.physicalId(),
-                                                      key.dialect(), key.schema(), key.table()))) {
+                    key.schema(), key.table()),
+                    new PhysicalStoreKey("tests", "other-db", "primary", key.physicalId(),
+                            key.dialect(), key.schema(), key.table()))) {
                 assertNotEquals(path, store.fileFor(k));
                 assertTrue(catalogFor.apply(k).resolve().valid());
             }
             assertNotEquals(key.hash(), new PhysicalStoreKey("tests", "db-main", "primary", key.physicalId(),
-                                                             key.dialect(), "other_schema", key.table()).hash());
+                    key.dialect(), "other_schema", key.table()).hash());
             assertNotEquals(key.hash(), new PhysicalStoreKey("tests", "db-main", "primary", key.physicalId(),
-                                                             key.dialect(), key.schema(), "other_table").hash());
+                    key.dialect(), key.schema(), "other_table").hash());
             groups.add("identity-isolation");
             try (var c = admin.createStatement()) {
                 c.execute("ALTER TABLE persist_scope.persisted_items ADD COLUMN new_column BIGINT");
@@ -217,11 +218,11 @@ class PersistenceIntegrationTest
             assertTrue(catalog.resolve().valid());
             groups.add("in-flight-invalidation");
             assertThrows(ObservationException.class,
-                         () -> new FilePhysicalStore(Path.of("/work"), List.of(Path.of("/work"), root)));
+                    () -> new FilePhysicalStore(Path.of("/work"), List.of(Path.of("/work"), root)));
             Path link = directory.resolve("source-link");
             Files.createSymbolicLink(link, Path.of("/work"));
             assertThrows(ObservationException.class,
-                         () -> new FilePhysicalStore(link, List.of(Path.of("/work"), root)));
+                    () -> new FilePhysicalStore(link, List.of(Path.of("/work"), root)));
             Files.delete(link);
             catalog.invalidate();
             Files.createSymbolicLink(path, root.resolve("examples/demo/cds/items.physical.yaml"));
@@ -230,12 +231,12 @@ class PersistenceIntegrationTest
             assertTrue(catalog.resolve().valid());
             groups.add("source-and-symlink-protection");
             assertThrows(IllegalArgumentException.class, () -> new PhysicalStoreKey("tests",
-                                                                                    url + password,
-                                                                                    "primary",
-                                                                                    key.physicalId(),
-                                                                                    key.dialect(),
-                                                                                    key.schema(),
-                                                                                    key.table()));
+                    url + password,
+                    "primary",
+                    key.physicalId(),
+                    key.dialect(),
+                    key.schema(),
+                    key.table()));
             try (var files = Files.list(directory)) {
                 for (var f : files.toList()) {
                     assertFalse(f.getFileName().toString().contains(password));
@@ -251,11 +252,11 @@ class PersistenceIntegrationTest
             columns.get(0).put("nativeType", "bigint");
             columns.get(0).put("scalarType", "INT64");
             columns.get(0).put("integerRange", Map.of("minimum", "-9223372036854775808",
-                                                      "maximum", "9223372036854775807"));
+                    "maximum", "9223372036854775807"));
             columns.get(1).put("characterLength", Map.of("unit", "CHARACTERS", "value",
-                                                         new java.math.BigInteger("9223372036854775807")));
+                    new java.math.BigInteger("9223372036854775807")));
             assertTrue(new String(PhysicalYaml.encode(exact, key), java.nio.charset.StandardCharsets.UTF_8)
-                               .contains("9223372036854775807"));
+                    .contains("9223372036854775807"));
             groups.add("exact-integer-codec");
             applicationCache(doc, key);
             groups.add("git-ignored-application-cache");
@@ -299,7 +300,7 @@ class PersistenceIntegrationTest
             assertThrows(ObservationException.class, () -> new FilePhysicalStore(custom, List.of(app)));
             new FilePhysicalStore(custom, List.of(app), List.of(custom)).get(key, observe);
             assertThrows(ObservationException.class,
-                         () -> new FilePhysicalStore(cache, List.of(app), List.of(custom)));
+                    () -> new FilePhysicalStore(cache, List.of(app), List.of(custom)));
             Path link = app.resolve("linked-cache");
             Files.createSymbolicLink(link, cache);
             assertThrows(ObservationException.class, () -> new FilePhysicalStore(link, List.of(app)));

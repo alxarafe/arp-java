@@ -35,35 +35,36 @@ class ConformanceTest
     static final Path DIR = ROOT.resolve("fixtures/dictionary/v1");
     static final ObjectMapper JSON = JsonSupport.reader(new Limits(4_194_304, 2048, 128));
     static final CatalogBuilder BUILDER = new CatalogBuilder();
-    static final Map<String, AtomicInteger> PASSED = new LinkedHashMap<>(), FAILED = new LinkedHashMap<>(), PLANNED = new LinkedHashMap<>();
+    static final Map<String, AtomicInteger> PASSED = new LinkedHashMap<>(), FAILED = new LinkedHashMap<>(),
+            PLANNED = new LinkedHashMap<>();
 
     @BeforeAll
     static void pinnedContract() throws Exception
     {
         var process = new ProcessBuilder("git",
-                                         "-C",
-                                         ROOT.toString(),
-                                         "rev-parse",
-                                         "HEAD").redirectErrorStream(true).start();
+                "-C",
+                ROOT.toString(),
+                "rev-parse",
+                "HEAD").redirectErrorStream(true).start();
         String actual = new String(process.getInputStream().readAllBytes(),
-                                   java.nio.charset.StandardCharsets.UTF_8).trim();
+                java.nio.charset.StandardCharsets.UTF_8).trim();
         assertEquals(0, process.waitFor());
         assertEquals(SHA, actual, "Use the exact pinned contract checkout");
         assertEquals(SHA, Files.readString(Path.of("contract.ref")).trim());
         assertEquals(0,
-                     new ProcessBuilder("git",
-                                        "-C",
-                                        ROOT.toString(),
-                                        "diff",
-                                        "--quiet",
-                                        "HEAD",
-                                        "--",
-                                        "fixtures",
-                                        "schemas",
-                                        "docs/features/arp-dict-001.md",
-                                        "docs/dictionary-portability-002.md",
-                                        "docs/dictionary-checks.md").start().waitFor(),
-                     "Contract inputs must not be edited");
+                new ProcessBuilder("git",
+                        "-C",
+                        ROOT.toString(),
+                        "diff",
+                        "--quiet",
+                        "HEAD",
+                        "--",
+                        "fixtures",
+                        "schemas",
+                        "docs/features/arp-dict-001.md",
+                        "docs/dictionary-portability-002.md",
+                        "docs/dictionary-checks.md").start().waitFor(),
+                "Contract inputs must not be edited");
     }
 
     static JsonNode read(Path path) throws Exception
@@ -157,35 +158,38 @@ class ConformanceTest
                 assertTrue(result.valid(), () -> result.issues().toString());
                 Object input = JSON.treeToValue(value.get("value"), Object.class);
                 compare(result.catalog().orElseThrow().validate(value.path("element").path("id").asText(),
-                                                                input).projection(), value.get("expected"), false);
+                        input).projection(), value.get("expected"), false);
             }));
         }
         for (var definition : read(DIR.resolve(manifest.path("sets").path("definitions").asText()))) {
             tests.add(vector("definitions",
-                             definition.path("id").asText(),
-                             () -> compare(build(definition.get("document")).projection(),
-                                           definition.get("expected"),
-                                           true)));
+                    definition.path("id").asText(),
+                    () -> compare(build(definition.get("document")).projection(),
+                            definition.get("expected"),
+                            true)));
         }
         for (var intake : read(DIR.resolve(manifest.path("sets").path("sources").asText()))) {
             tests.add(vector("sources", intake.path("id").asText(), () -> {
                 Path path = ROOT.resolve(intake.path("path").asText()).normalize();
                 assertTrue(path.startsWith(DIR));
                 var source = new Source("fixture",
-                                        intake.path("id").asText(),
-                                        Source.Encoding.valueOf(intake.path("encoding").asText().toUpperCase(java.util.Locale.ROOT)),
-                                        Files.readAllBytes(path));
+                        intake.path("id").asText(),
+                        Source.Encoding.valueOf(intake.path("encoding").asText().toUpperCase(java.util.Locale.ROOT)),
+                        Files.readAllBytes(path));
                 compare(BUILDER.buildCatalog(List.of(source)).projection(), intake.get("expected"), true);
             }));
             if (intake.has("descriptorProjection")) {
                 tests.add(vector("source-descriptors", intake.path("id").asText(), () -> {
                     var source = new Source("fixture",
-                                            intake.path("id").asText(),
-                                            Source.Encoding.valueOf(intake.path("encoding").asText().toUpperCase(java.util.Locale.ROOT)),
-                                            Files.readAllBytes(ROOT.resolve(intake.path("path").asText())));
+                            intake.path("id").asText(),
+                            Source.Encoding
+                                    .valueOf(intake.path("encoding").asText().toUpperCase(java.util.Locale.ROOT)),
+                            Files.readAllBytes(ROOT.resolve(intake.path("path").asText())));
                     var result = BUILDER.buildCatalog(List.of(source));
                     assertTrue(result.valid());
-                    compare(result.catalog().orElseThrow().resolve(intake.path("descriptorProjection").path("id").asText()).descriptor().orElseThrow().projection(),
+                    compare(result.catalog().orElseThrow()
+                            .resolve(intake.path("descriptorProjection").path("id").asText()).descriptor().orElseThrow()
+                            .projection(),
                             intake.get("descriptorProjection"),
                             false);
                 }));
@@ -197,10 +201,12 @@ class ConformanceTest
                     .putObject("constraints").set("pattern", pattern.get("pattern"));
             tests.add(vector("patterns", pattern.path("id").asText(), () -> {
                 var result = build(document);
-                Map<String, Object> actual = result.valid() ? Map.of("valid", true) : Map.of("valid",
-                                                                                             false,
-                                                                                             "code",
-                                                                                             result.issues().getFirst().code().name());
+                Map<String, Object> actual = result.valid()
+                        ? Map.of("valid", true)
+                        : Map.of("valid",
+                                false,
+                                "code",
+                                result.issues().getFirst().code().name());
                 compare(actual, pattern.get("expected"), false);
             }));
             int index = 0;
@@ -209,8 +215,8 @@ class ConformanceTest
                     var result = build(document);
                     assertTrue(result.valid());
                     assertEquals(sample.path("matches").asBoolean(),
-                                 result.catalog().orElseThrow().validate("fixture.pattern",
-                                                                         sample.path("value").asText()).valid());
+                            result.catalog().orElseThrow().validate("fixture.pattern",
+                                    sample.path("value").asText()).valid());
                 }));
             }
         }
@@ -226,9 +232,9 @@ class ConformanceTest
                         var sources = new ArrayList<Source>();
                         for (var s : step.path("sources")) {
                             sources.add(new Source(s.path("providerId").asText(),
-                                                   s.path("sourceId").asText(),
-                                                   Source.Encoding.JSON,
-                                                   JSON.writeValueAsBytes(s.get("document"))));
+                                    s.path("sourceId").asText(),
+                                    Source.Encoding.JSON,
+                                    JSON.writeValueAsBytes(s.get("document"))));
                         }
                         var result = BUILDER.buildCatalog(sources);
                         lastBuild.put(context, result);
@@ -237,26 +243,27 @@ class ConformanceTest
                     }));
                     case "resolve" -> {
                         tests.add(vector("catalog-steps",
-                                         name,
-                                         () -> compare(contexts.get(context).resolve(step.path("elementId").asText()).projection(),
-                                                       step.get("expected"),
-                                                       false)));
+                                name,
+                                () -> compare(
+                                        contexts.get(context).resolve(step.path("elementId").asText()).projection(),
+                                        step.get("expected"),
+                                        false)));
                         if (step.has("descriptorProjection")) {
                             tests.add(vector("descriptors",
-                                             name,
-                                             () -> compare(contexts.get(context).resolve(
-                                                                   step.path("elementId").asText()).descriptor().orElseThrow().projection(),
-                                                           step.get(
-                                                                   "descriptorProjection"),
-                                                           false)));
+                                    name,
+                                    () -> compare(contexts.get(context).resolve(
+                                            step.path("elementId").asText()).descriptor().orElseThrow().projection(),
+                                            step.get(
+                                                    "descriptorProjection"),
+                                            false)));
                         }
                     }
                     case "assertRejectedGeneration" -> tests.add(vector("catalog-steps",
-                                                                        name,
-                                                                        () -> compare(Map.of("published",
-                                                                                             lastBuild.get(context).catalog().isPresent()),
-                                                                                      step.get("expected"),
-                                                                                      false)));
+                            name,
+                            () -> compare(Map.of("published",
+                                    lastBuild.get(context).catalog().isPresent()),
+                                    step.get("expected"),
+                                    false)));
                     default -> fail("Unknown fixture operation " + operation);
                 }
             }
@@ -278,18 +285,19 @@ class ConformanceTest
             groups.put(group, Map.of("passed", p, "failed", f, "notExecuted", pending));
         }
         var report = Map.of("contractSha",
-                            SHA,
-                            "passed",
-                            passed,
-                            "failed",
-                            failed,
-                            "notExecuted",
-                            notExecuted,
-                            "groups",
-                            groups);
+                SHA,
+                "passed",
+                passed,
+                "failed",
+                failed,
+                "notExecuted",
+                notExecuted,
+                "groups",
+                groups);
         Files.createDirectories(Path.of("target"));
         Files.writeString(Path.of("target/conformance-summary.json"), JsonSupport.write(report) + "\n");
-        System.out.println("Shared fixture assertions: " + passed + " passed, " + failed + " failed. " + JsonSupport.write(
-                groups));
+        System.out.println(
+                "Shared fixture assertions: " + passed + " passed, " + failed + " failed. " + JsonSupport.write(
+                        groups));
     }
 }

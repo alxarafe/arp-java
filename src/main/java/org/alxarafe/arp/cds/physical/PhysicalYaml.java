@@ -62,17 +62,15 @@ public final class PhysicalYaml
     {
         try {
             var intake = RESOLVER.parse(new Source("physical-store", "observed", Source.Encoding.JSON,
-                                                   JSON.writeValueAsBytes(doc)));
+                    JSON.writeValueAsBytes(doc)));
             if (!(boolean) intake.get("valid") || !RESOLVER.resolve(Map.of(
-                    "physical", Map.of("stored", doc), "logical", Map.of(), "projections", Map.of()), EMPTY).valid())
-            {
+                    "physical", Map.of("stored", doc), "logical", Map.of(), "projections", Map.of()), EMPTY).valid()) {
                 throw new ObservationException();
             }
             var source = (Map<String, Object>) doc.get("source");
             if (!key.physicalId().equals(doc.get("id")) || !key.provider().equals(source.get("provider"))
                     || !key.dialect().equals(source.get("dialect")) || !key.schema().equals(source.get("schema"))
-                    || !key.table().equals(source.get("name")))
-            {
+                    || !key.table().equals(source.get("name"))) {
                 throw new ObservationException();
             }
         } catch (java.io.IOException e) {

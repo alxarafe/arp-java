@@ -108,9 +108,9 @@ public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCa
             }
             if (blocked != null) {
                 return CdsReadResult.failure("OBSERVATION_FAILED",
-                                             "/providers/" + blocked.replace("~", "~0").replace("/",
-                                                                                                "~1"),
-                                             "execution-failure");
+                        "/providers/" + blocked.replace("~", "~0").replace("/",
+                                "~1"),
+                        "execution-failure");
             }
             ticket = publication.beginGeneration();
         }
@@ -127,9 +127,9 @@ public final class PhysicalCatalog implements org.alxarafe.arp.dictionary.ReadCa
             } catch (ObservationException e) {
                 String id = entry.getValue().providerId().replace("~", "~0").replace("/", "~1");
                 return publication.publish(ticket,
-                                           CdsReadResult.failure("OBSERVATION_FAILED",
-                                                                 "/providers/" + id,
-                                                                 "execution-failure"));
+                        CdsReadResult.failure("OBSERVATION_FAILED",
+                                "/providers/" + id,
+                                "execution-failure"));
             }
         }
         bundle.put("physical", physical);

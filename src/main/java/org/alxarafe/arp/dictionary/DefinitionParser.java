@@ -12,10 +12,10 @@ final class DefinitionParser
 {
     private static final Set<String> KEYS = Set.of("id", "type", "constraints", "enumValues", "label", "description");
     private static final Set<String> NUMERIC = Set.of("minimum",
-                                                      "maximum",
-                                                      "multipleOf",
-                                                      "exclusiveMinimum",
-                                                      "exclusiveMaximum");
+            "maximum",
+            "multipleOf",
+            "exclusiveMinimum",
+            "exclusiveMaximum");
 
     private DefinitionParser()
     {
@@ -27,8 +27,7 @@ final class DefinitionParser
             throw Rejected.element();
         }
         if (!(input.get("id") instanceof String id) || id.length() > 128
-                || !id.matches("[A-Za-z][A-Za-z0-9_-]*(\\.[A-Za-z][A-Za-z0-9_-]*)+"))
-        {
+                || !id.matches("[A-Za-z][A-Za-z0-9_-]*(\\.[A-Za-z][A-Za-z0-9_-]*)+")) {
             throw Rejected.element();
         }
         ScalarType type;
@@ -104,33 +103,33 @@ final class DefinitionParser
             throw Rejected.element();
         }
         if (constraints.containsKey("precision")) {
-            BigDecimal precision = Numbers.metadata(constraints.get("precision")), scale = Numbers.metadata(constraints.get(
-                    "scale"));
-            if (precision.compareTo(BigDecimal.ONE) < 0 || precision.compareTo(BigDecimal.valueOf(4096)) > 0 || scale.compareTo(
-                    precision) > 0)
-            {
+            BigDecimal precision = Numbers.metadata(constraints.get("precision")),
+                    scale = Numbers.metadata(constraints.get(
+                            "scale"));
+            if (precision.compareTo(BigDecimal.ONE) < 0 || precision.compareTo(BigDecimal.valueOf(4096)) > 0
+                    || scale.compareTo(
+                            precision) > 0) {
                 throw Rejected.element();
             }
         }
         if (constraints.containsKey("minimumLength") && constraints.containsKey("maximumLength")
                 && Numbers.metadata(constraints.get("minimumLength")).compareTo(Numbers.metadata(constraints.get(
-                "maximumLength"))) > 0)
-        {
+                        "maximumLength"))) > 0) {
             throw Rejected.element();
         }
         for (String endpoint : List.of("Minimum", "Maximum")) {
             if (Boolean.TRUE.equals(constraints.get("exclusive" + endpoint))
-                    && !constraints.containsKey(endpoint.toLowerCase(java.util.Locale.ROOT)))
-            {
+                    && !constraints.containsKey(endpoint.toLowerCase(java.util.Locale.ROOT))) {
                 throw Rejected.element();
             }
         }
         if (constraints.containsKey("minimum") && constraints.containsKey("maximum")) {
-            int comparison = new BigDecimal((String) constraints.get("minimum")).compareTo(new BigDecimal((String) constraints.get(
-                    "maximum")));
-            if (comparison > 0 || comparison == 0 && (Boolean.TRUE.equals(constraints.get("exclusiveMinimum")) || Boolean.TRUE.equals(
-                    constraints.get("exclusiveMaximum"))))
-            {
+            int comparison = new BigDecimal((String) constraints.get("minimum"))
+                    .compareTo(new BigDecimal((String) constraints.get(
+                            "maximum")));
+            if (comparison > 0 || comparison == 0
+                    && (Boolean.TRUE.equals(constraints.get("exclusiveMinimum")) || Boolean.TRUE.equals(
+                            constraints.get("exclusiveMaximum")))) {
                 throw Rejected.element();
             }
         }

@@ -59,55 +59,57 @@ public final class SqlServerObservationProvider implements PhysicalObservationPr
                 SqlServerMetadata.protect(connection, timeout, schema, table);
                 String target = " FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id ";
                 boolean constrained = !"0".equals(SqlMetadata.query(connection,
-                                                                    timeout,
-                                                                    "SELECT COUNT(*) AS n FROM sys.check_constraints ck "
-                                                                            + "JOIN sys.tables t ON t.object_id=ck.parent_object_id "
-                                                                            + "JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=? AND t.name=?",
-                                                                    schema,
-                                                                    table)
-                                                          .getFirst().get("n"));
+                        timeout,
+                        "SELECT COUNT(*) AS n FROM sys.check_constraints ck "
+                                + "JOIN sys.tables t ON t.object_id=ck.parent_object_id "
+                                + "JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=? AND t.name=?",
+                        schema,
+                        table)
+                        .getFirst().get("n"));
                 var facts = SqlMetadata.query(connection,
-                                              timeout,
-                                              "SELECT c.name AS column_name,ty.name AS type_name,c.max_length,c.precision,c.scale,"
-                                                      + "c.is_nullable,c.column_id,c.is_identity,c.is_computed,ty.is_user_defined,c.is_hidden"
-                                                      + target + "JOIN sys.columns c ON c.object_id=t.object_id "
-                                                      + "JOIN sys.types ty ON ty.user_type_id=c.user_type_id "
-                                                      + "WHERE s.name=? AND t.name=? ORDER BY c.column_id",
-                                              schema,
-                                              table);
+                        timeout,
+                        "SELECT c.name AS column_name,ty.name AS type_name,c.max_length,c.precision,c.scale,"
+                                + "c.is_nullable,c.column_id,c.is_identity,c.is_computed,ty.is_user_defined,c.is_hidden"
+                                + target + "JOIN sys.columns c ON c.object_id=t.object_id "
+                                + "JOIN sys.types ty ON ty.user_type_id=c.user_type_id "
+                                + "WHERE s.name=? AND t.name=? ORDER BY c.column_id",
+                        schema,
+                        table);
                 var columns = new ArrayList<Map<String, Object>>();
                 for (var fact : facts) {
                     String type = fact.get("type_name"), nativeType = type;
                     int length = Integer.parseInt(fact.get("max_length"));
                     if (List.of("nvarchar", "nchar", "varchar", "char").contains(type)) {
-                        nativeType += "(" + (length == -1 ? "max"
+                        nativeType += "(" + (length == -1
+                                ? "max"
                                 : Integer.toString(length / (type.startsWith("n") ? 2 : 1))) + ")";
                     }
                     if (type.equals("decimal") || type.equals("numeric")) {
                         nativeType += "(" + fact.get("precision") + "," + fact.get("scale") + ")";
                     }
-                    String scalar = constrained || SqlMetadata.truth(fact.get("is_user_defined")) ? null
+                    String scalar = constrained || SqlMetadata.truth(fact.get("is_user_defined"))
+                            ? null
                             : switch (type) {
-                        case "tinyint" -> "UINT8";
-                        case "smallint" -> "INT16";
-                        case "int" -> "INT32";
-                        case "bigint" -> "INT64";
-                        case "bit" -> "BOOLEAN";
-                        case "date" -> "DATE";
-                        case "decimal", "numeric" -> "DECIMAL";
-                        case "varchar", "nvarchar" -> length == -1 ? "TEXT" : "STRING";
-                        case "char", "nchar" -> "STRING";
-                        case "text", "ntext" -> "TEXT";
-                        default -> null;
-                    };
+                                case "tinyint" -> "UINT8";
+                                case "smallint" -> "INT16";
+                                case "int" -> "INT32";
+                                case "bigint" -> "INT64";
+                                case "bit" -> "BOOLEAN";
+                                case "date" -> "DATE";
+                                case "decimal", "numeric" -> "DECIMAL";
+                                case "varchar", "nvarchar" -> length == -1 ? "TEXT" : "STRING";
+                                case "char", "nchar" -> "STRING";
+                                case "text", "ntext" -> "TEXT";
+                                default -> null;
+                            };
                     boolean nullable = SqlMetadata.truth(fact.get("is_nullable"));
                     var column = SqlMetadata.column(fact.get("column_name"),
-                                                    nativeType,
-                                                    Integer.parseInt(fact.get("column_id")),
-                                                    nullable,
-                                                    scalar,
-                                                    SqlMetadata.truth(fact.get("is_computed")),
-                                                    SqlMetadata.truth(fact.get("is_identity")));
+                            nativeType,
+                            Integer.parseInt(fact.get("column_id")),
+                            nullable,
+                            scalar,
+                            SqlMetadata.truth(fact.get("is_computed")),
+                            SqlMetadata.truth(fact.get("is_identity")));
                     if (constrained && nullable) {
                         column.remove("nullable");
                     }
@@ -116,7 +118,7 @@ public final class SqlServerObservationProvider implements PhysicalObservationPr
                     }
                     if (type.equals("decimal") || type.equals("numeric")) {
                         column.put("decimalGeometry", Map.of("precision", Integer.parseInt(fact.get("precision")),
-                                                             "scale", Integer.parseInt(fact.get("scale"))));
+                                "scale", Integer.parseInt(fact.get("scale"))));
                     }
                     columns.add(column);
                 }
@@ -126,7 +128,7 @@ public final class SqlServerObservationProvider implements PhysicalObservationPr
                         + "JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id "
                         + "WHERE s.name=? AND t.name=? AND ic.key_ordinal>0 ORDER BY ic.key_ordinal", schema, table);
                 var result = SqlMetadata.physical(id, provider, "sqlserver", schema, table, version, columns,
-                                                  keys.stream().map(k -> k.get("column_name")).toList());
+                        keys.stream().map(k -> k.get("column_name")).toList());
                 connection.commit();
                 return result;
             } catch (Exception error) {

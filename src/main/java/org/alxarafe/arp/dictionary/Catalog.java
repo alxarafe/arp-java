@@ -33,15 +33,19 @@ public final class Catalog
     public Resolution resolve(String id)
     {
         var descriptor = elements.get(java.util.Objects.requireNonNull(id));
-        return descriptor == null ? new Resolution(Optional.empty(), missing(id)) : new Resolution(Optional.of(
-                descriptor), List.of());
+        return descriptor == null
+                ? new Resolution(Optional.empty(), missing(id))
+                : new Resolution(Optional.of(
+                        descriptor), List.of());
     }
 
     public ValidationResult validate(String id, Object portableValue)
     {
         var descriptor = elements.get(java.util.Objects.requireNonNull(id));
-        return descriptor == null ? ValidationResult.failure(missing(id)) : ScalarValidator.validate(descriptor,
-                                                                                                     portableValue);
+        return descriptor == null
+                ? ValidationResult.failure(missing(id))
+                : ScalarValidator.validate(descriptor,
+                        portableValue);
     }
 
     private static List<Issue> missing(String id)
