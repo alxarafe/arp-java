@@ -104,10 +104,10 @@ public class SqlServerRecordReader extends SqlRecordReader
     {
         var facts = (Map<?, ?>) source.physical().get("source");
         return new SqlServerObservationProvider(connections,
-                                                (String) facts.get("provider"),
-                                                (String) source.physical().get("id"),
-                                                source.schema(),
-                                                source.table(),
-                                                timeoutSeconds).observe();
+                (String) facts.get("provider"),
+                (String) source.physical().get("id"),
+                source.schema(),
+                source.table(),
+                timeoutSeconds).observe();
     }
 }

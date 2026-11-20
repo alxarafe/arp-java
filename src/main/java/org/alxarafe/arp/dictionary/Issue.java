@@ -4,10 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public record Issue(Code code, String elementId, String constraint, Provenance provenance)
-{
-    public Issue
-    {
+public record Issue(Code code, String elementId, String constraint, Provenance provenance) {
+    public Issue {
         Objects.requireNonNull(code);
     }
 

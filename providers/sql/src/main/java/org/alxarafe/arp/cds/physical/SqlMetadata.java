@@ -81,7 +81,7 @@ public final class SqlMetadata
                 int bits = Integer.parseInt(scalar.substring(signed ? 3 : 4));
                 var high = BigInteger.ONE.shiftLeft(bits - (signed ? 1 : 0));
                 value.put("integerRange", Map.of("minimum", signed ? high.negate().toString() : "0",
-                                                 "maximum", high.subtract(BigInteger.ONE).toString()));
+                        "maximum", high.subtract(BigInteger.ONE).toString()));
             }
         }
         return value;
@@ -96,7 +96,8 @@ public final class SqlMetadata
             throw new SQLException("Invalid metadata cardinality");
         }
         return Map.of("apiVersion", "arp.physical/v1", "id", id, "kind", "table", "source",
-                      Map.of("provider", provider, "dialect", dialect, "schema", schema, "name", table,
-                             "engineVersion", version), "columns", columns, "primaryKey", keys);
+                Map.of("provider", provider, "dialect", dialect, "schema", schema, "name", table,
+                        "engineVersion", version),
+                "columns", columns, "primaryKey", keys);
     }
 }

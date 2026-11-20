@@ -24,8 +24,7 @@ public final class FilePhysicalStore
         Map<String, Object> get() throws ObservationException;
     }
 
-    private record State(String generation, String key, String digest, boolean valid)
-    {
+    private record State(String generation, String key, String digest, boolean valid) {
     }
 
     private final Path root;
@@ -166,8 +165,7 @@ public final class FilePhysicalStore
             }
             State state = json.readValue(data.array(), State.class);
             if (!key.hash().equals(state.key()) || !state.generation().matches("[0-9a-f]{32}")
-                    || state.valid() && (state.digest() == null || !state.digest().matches("[0-9a-f]{64}")))
-            {
+                    || state.valid() && (state.digest() == null || !state.digest().matches("[0-9a-f]{64}"))) {
                 throw new IOException();
             }
             return state;
@@ -200,7 +198,7 @@ public final class FilePhysicalStore
         try {
             if (Files.getFileStore(temp).supportsFileAttributeView("posix")) {
                 Files.setPosixFilePermissions(temp,
-                                              java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
             }
             try (var file = FileChannel.open(temp, StandardOpenOption.WRITE)) {
                 var buffer = ByteBuffer.wrap(data);
@@ -225,7 +223,7 @@ public final class FilePhysicalStore
     private static int git(Path repository, String... arguments) throws IOException, ObservationException
     {
         var command = new java.util.ArrayList<String>(List.of("git", "-C",
-                                                              repository.toString()));
+                repository.toString()));
         command.addAll(List.of(arguments));
         var process = new ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD).start();
@@ -258,15 +256,15 @@ public final class FilePhysicalStore
             }
         }
         var authorized = cacheRoots.isEmpty() && repository != null
-                ? List.of(repository.resolve("cache/arp/physical")) : cacheRoots;
+                ? List.of(repository.resolve("cache/arp/physical"))
+                : cacheRoots;
         if (sources.stream().anyMatch(root::startsWith) || repository != null || !cacheRoots.isEmpty()) {
             if (authorized.stream().noneMatch(root::startsWith)) {
                 throw new ObservationException();
             }
         }
         if (repository != null && (git(repository, "check-ignore", "--quiet", "--no-index", "--", root + "/") != 0
-                || git(repository, "--literal-pathspecs", "ls-files", "--error-unmatch", "--", root + "/") != 1))
-        {
+                || git(repository, "--literal-pathspecs", "ls-files", "--error-unmatch", "--", root + "/") != 1)) {
             throw new ObservationException();
         }
     }

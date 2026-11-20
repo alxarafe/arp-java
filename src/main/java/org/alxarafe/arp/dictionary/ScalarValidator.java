@@ -15,7 +15,7 @@ final class ScalarValidator
 {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSSS", Locale.ROOT);
     private static final DateTimeFormatter INSTANT = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSSSSS'Z'",
-                                                                                 Locale.ROOT);
+            Locale.ROOT);
 
     private ScalarValidator()
     {
@@ -46,8 +46,7 @@ final class ScalarValidator
                     }
                 }
                 if (constraints.containsKey("multipleOf") && number.remainder(new BigDecimal((String) constraints.get(
-                        "multipleOf"))).signum() != 0)
-                {
+                        "multipleOf"))).signum() != 0) {
                     fail(issues, id, "multipleOf");
                 }
                 if (constraints.containsKey("precision")) {
@@ -63,17 +62,17 @@ final class ScalarValidator
             }
             if (descriptor.type().text() || descriptor.type() == ScalarType.BINARY) {
                 String text = (String) value;
-                int length = descriptor.type() == ScalarType.BINARY ? Base64.getDecoder().decode(text).length : text.codePointCount(
-                        0,
-                        text.length());
+                int length = descriptor.type() == ScalarType.BINARY
+                        ? Base64.getDecoder().decode(text).length
+                        : text.codePointCount(
+                                0,
+                                text.length());
                 if (constraints.containsKey("minimumLength") && BigDecimal.valueOf(length).compareTo(Numbers.metadata(
-                        constraints.get("minimumLength"))) < 0)
-                {
+                        constraints.get("minimumLength"))) < 0) {
                     fail(issues, id, "minimumLength");
                 }
                 if (constraints.containsKey("maximumLength") && BigDecimal.valueOf(length).compareTo(Numbers.metadata(
-                        constraints.get("maximumLength"))) > 0)
-                {
+                        constraints.get("maximumLength"))) > 0) {
                     fail(issues, id, "maximumLength");
                 }
                 if (descriptor.pattern() != null && !descriptor.pattern().matches(text)) {
@@ -95,7 +94,7 @@ final class ScalarValidator
     public static ValidationResult read(ScalarType type, Object value)
     {
         return validate(new Descriptor("stored", type, java.util.Map.of(), java.util.List.of(), null, null, null),
-                        value);
+                value);
     }
 
     private static void fail(ArrayList<Issue> issues, String id, String constraint)
@@ -148,8 +147,7 @@ final class ScalarValidator
             }
             case DATETIME -> {
                 if (!text.matches(
-                        "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?(Z|[+-][0-9]{2}:[0-9]{2})"))
-                {
+                        "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,7})?(Z|[+-][0-9]{2}:[0-9]{2})")) {
                     throw Rejected.type();
                 }
                 date(text.substring(0, 10));

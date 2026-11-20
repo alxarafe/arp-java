@@ -39,8 +39,7 @@ public abstract class SqlRecordReader implements RecordReader
         this.timeoutSeconds = timeoutSeconds;
     }
 
-    protected record SqlSource(Map<String, Object> physical, String schema, String table)
-    {
+    protected record SqlSource(Map<String, Object> physical, String schema, String table) {
     }
 
     private static final class SqlPrepared extends ReadPlan.Prepared
@@ -107,7 +106,7 @@ public abstract class SqlRecordReader implements RecordReader
             var stored = map(field.get("physical"));
             ScalarType logical = type(field, "type");
             need(logical.integer() && type(stored, "scalarType").integer()
-                         && Boolean.FALSE.equals(stored.get("nullable")), "CAPABILITY_UNAVAILABLE");
+                    && Boolean.FALSE.equals(stored.get("nullable")), "CAPABILITY_UNAVAILABLE");
             keys.add(new ReadPlan.Column(name, logical, false));
         }
         var columns = new ArrayList<ReadPlan.Column>();
@@ -129,14 +128,14 @@ public abstract class SqlRecordReader implements RecordReader
             need(fields.containsKey(name), "CAPABILITY_UNAVAILABLE");
             ScalarType logical = type(fields.get(name), "type");
             need(logical.integer() && type(map(fields.get(name).get("physical")), "scalarType").integer(),
-                 "CAPABILITY_UNAVAILABLE");
+                    "CAPABILITY_UNAVAILABLE");
             var decoded = ScalarValidator.read(logical, value);
             need(decoded.valid(), "CAPABILITY_UNAVAILABLE");
             restrictions.put(name, decoded.normalizedValue().orElseThrow());
         });
         var source = map(physical.get("source"));
         return new SqlPrepared(this, new SqlSource(physical, (String) source.get("schema"),
-                                                   (String) source.get("name")), columns, keys, restrictions);
+                (String) source.get("name")), columns, keys, restrictions);
     }
 
     protected final String quote(String name)
@@ -237,20 +236,23 @@ public abstract class SqlRecordReader implements RecordReader
         });
         if (plan.position() != null) {
             predicates.add(keyComparison(prepared.keys().stream().map(k -> quote(k.name())).toList(),
-                                         plan.get(), plan.position(), parameters));
+                    plan.get(), plan.position(), parameters));
         }
         String relation = quote(prepared.source.schema()) + "." + quote(prepared.source.table());
         String sql = "SELECT " + String.join(",", names.stream().map(n -> valueExpression(quote(n),
-                                                                                          prepared.columns().stream().filter(
-                                                                                                          c -> c.name().equals(n)).findFirst()
-                                                                                                  .orElseGet(() -> prepared.keys().stream().filter(
-                                                                                                                  c -> c.name().equals(
-                                                                                                                          n)).findFirst()
-                                                                                                          .orElseThrow()).type())).toList())
+                prepared.columns().stream().filter(
+                        c -> c.name().equals(n)).findFirst()
+                        .orElseGet(() -> prepared.keys().stream().filter(
+                                c -> c.name().equals(
+                                        n))
+                                .findFirst()
+                                .orElseThrow())
+                        .type()))
+                .toList())
                 + " FROM " + fromModifier + relation
                 + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
                 + " ORDER BY " + String.join(",", prepared.keys().stream()
-                .map(k -> relation + "." + quote(k.name()) + " ASC").toList())
+                        .map(k -> relation + "." + quote(k.name()) + " ASC").toList())
                 + limitClause();
         int take = plan.get() ? 2 : plan.limit() + 1;
         try (var statement = connection.prepareStatement(sql)) {

@@ -65,12 +65,12 @@ class RuntimeTest
                 "{\"id\":\"immutable.x\",\"type\":\"ENUM\",\"enumValues\":[\"red\",\"blue\"],\"constraints\":{\"maximumLength\":8}}");
         var descriptor = snapshot.resolve("immutable.x").descriptor().orElseThrow();
         assertThrows(UnsupportedOperationException.class,
-                     () -> descriptor.constraints().put("maximumLength", BigInteger.ZERO));
+                () -> descriptor.constraints().put("maximumLength", BigInteger.ZERO));
         assertThrows(UnsupportedOperationException.class, () -> descriptor.enumValues().clear());
         assertThrows(UnsupportedOperationException.class, () -> descriptor.projection().clear());
         assertThrows(UnsupportedOperationException.class, () -> snapshot.ids().clear());
         assertThrows(UnsupportedOperationException.class,
-                     () -> snapshot.validate("immutable.x", "missing").issues().clear());
+                () -> snapshot.validate("immutable.x", "missing").issues().clear());
         assertTrue(snapshot.validate("immutable.x", "blue").valid());
     }
 
@@ -111,7 +111,8 @@ class RuntimeTest
                         start.await();
                         String type = index % 2 == 0 ? "BOOLEAN" : "STRING";
                         Object value = index % 2 == 0 ? Boolean.TRUE : "exact";
-                        var result = BUILDER.buildCatalog(List.of(json("{\"id\":\"parallel.x\",\"type\":\"" + type + "\"}")));
+                        var result = BUILDER
+                                .buildCatalog(List.of(json("{\"id\":\"parallel.x\",\"type\":\"" + type + "\"}")));
                         var snapshot = result.catalog().orElseThrow();
                         for (int n = 0; n < 300; n++) {
                             assertEquals(type, snapshot.resolve("parallel.x").descriptor().orElseThrow().type().name());
@@ -147,7 +148,7 @@ class RuntimeTest
                         for (int n = 0; n < 1500; n++) {
                             var snapshot = active.get();
                             assertEquals(snapshot.resolve("generation.a").descriptor().orElseThrow().type(),
-                                         snapshot.resolve("generation.b").descriptor().orElseThrow().type());
+                                    snapshot.resolve("generation.b").descriptor().orElseThrow().type());
                             assertEquals(2, snapshot.ids().size());
                         }
                         return null;
@@ -190,8 +191,8 @@ class RuntimeTest
             definitions.add("{\"id\":\"limit.x" + i + "\",\"type\":\"TEXT\"}");
         }
         assertEquals(2048,
-                     BUILDER.buildCatalog(List.of(json(String.join(",",
-                                                                   definitions)))).catalog().orElseThrow().ids().size());
+                BUILDER.buildCatalog(List.of(json(String.join(",",
+                        definitions)))).catalog().orElseThrow().ids().size());
         definitions.add("{\"id\":\"limit.extra\",\"type\":\"TEXT\"}");
         rejected(json(String.join(",", definitions)), Code.DICTIONARY_LIMIT_EXCEEDED);
     }
@@ -233,15 +234,15 @@ class RuntimeTest
     void everyForbiddenYamlConstructIsRejected()
     {
         for (String input : List.of("%UNKNOWN example\n---\n{}",
-                                    "%YAML 1.1\n---\n{}",
-                                    "%TAG !e! tag:example.com,2026:\n---\n{}",
-                                    "a: &scalar x",
-                                    "a: *missing",
-                                    "!!java/object:java.lang.ProcessBuilder {}",
-                                    "!local {}",
-                                    "a: !!str x",
-                                    "a: {<<: {b: 1}}",
-                                    "{}\n---\n{}")) {
+                "%YAML 1.1\n---\n{}",
+                "%TAG !e! tag:example.com,2026:\n---\n{}",
+                "a: &scalar x",
+                "a: *missing",
+                "!!java/object:java.lang.ProcessBuilder {}",
+                "!local {}",
+                "a: !!str x",
+                "a: {<<: {b: 1}}",
+                "{}\n---\n{}")) {
             rejected(yaml(input), Code.DICTIONARY_DOCUMENT_INVALID);
         }
     }
@@ -253,8 +254,9 @@ class RuntimeTest
                 "apiVersion: arp.dictionary/v1\nelements:\n  - id: literal.x\n    type: TEXT\n    label: '! & * <<: %YAML ---'\n    description: |\n      %YAML 1.2\n      !!java/object does not execute\n");
         var result = BUILDER.buildCatalog(List.of(input));
         assertTrue(result.valid(), () -> result.issues().toString());
-        assertTrue(result.catalog().orElseThrow().resolve("literal.x").descriptor().orElseThrow().description().orElseThrow().contains(
-                "!!java/object"));
+        assertTrue(result.catalog().orElseThrow().resolve("literal.x").descriptor().orElseThrow().description()
+                .orElseThrow().contains(
+                        "!!java/object"));
     }
 
     @Test
@@ -264,7 +266,7 @@ class RuntimeTest
                 "apiVersion: arp.dictionary/v1\nelements: [{id: literal.x, type: ENUM, enumValues: [yes, no, on, off, 2026-11-14]}]")));
         assertTrue(result.valid());
         assertEquals(List.of("yes", "no", "on", "off", "2026-11-14"),
-                     result.catalog().orElseThrow().resolve("literal.x").descriptor().orElseThrow().enumValues());
+                result.catalog().orElseThrow().resolve("literal.x").descriptor().orElseThrow().enumValues());
     }
 
     @Test
@@ -277,7 +279,7 @@ class RuntimeTest
         var first = BUILDER.buildCatalog(List.of(json)).catalog().orElseThrow();
         var second = BUILDER.buildCatalog(List.of(yaml)).catalog().orElseThrow();
         assertEquals(first.resolve("exact.x").descriptor().orElseThrow().projection(),
-                     second.resolve("exact.x").descriptor().orElseThrow().projection());
+                second.resolve("exact.x").descriptor().orElseThrow().projection());
         assertEquals("0.003", second.validate("exact.x", "0.00300").normalizedValue().orElseThrow());
     }
 
@@ -285,14 +287,16 @@ class RuntimeTest
     void integerMetadataBeyondLongIsPreservedThroughExport() throws Exception
     {
         String integer = "92233720368547758081234567890123456789";
-        for (Source source : List.of(json("{\"id\":\"exact.x\",\"type\":\"TEXT\",\"constraints\":{\"maximumLength\":" + integer + "}}"),
-                                     yaml("apiVersion: arp.dictionary/v1\nelements: [{id: exact.x, type: TEXT, constraints: {maximumLength: " + integer + "}}]"))) {
+        for (Source source : List.of(
+                json("{\"id\":\"exact.x\",\"type\":\"TEXT\",\"constraints\":{\"maximumLength\":" + integer + "}}"),
+                yaml("apiVersion: arp.dictionary/v1\nelements: [{id: exact.x, type: TEXT, constraints: {maximumLength: "
+                        + integer + "}}]"))) {
             var snapshot = BUILDER.buildCatalog(List.of(source)).catalog().orElseThrow();
             var descriptor = snapshot.resolve("exact.x").descriptor().orElseThrow();
             assertEquals(new BigInteger(integer), descriptor.constraints().get("maximumLength"));
             assertEquals(new BigInteger(integer),
-                         JsonSupport.reader(Limits.DEFAULT).readTree(descriptor.toJson()).path("constraints").path(
-                                 "maximumLength").bigIntegerValue());
+                    JsonSupport.reader(Limits.DEFAULT).readTree(descriptor.toJson()).path("constraints").path(
+                            "maximumLength").bigIntegerValue());
             assertTrue(snapshot.validate("exact.x", "text").valid());
         }
     }
@@ -301,19 +305,21 @@ class RuntimeTest
     void integralDecimalMetadataRemainsExactAndRejectsFractionalKinds()
     {
         for (String integer : List.of("1.00", "0.1e1", "1e127")) {
-            var snapshot = catalog("{\"id\":\"exact.x\",\"type\":\"TEXT\",\"constraints\":{\"maximumLength\":" + integer + "}}");
+            var snapshot = catalog(
+                    "{\"id\":\"exact.x\",\"type\":\"TEXT\",\"constraints\":{\"maximumLength\":" + integer + "}}");
             assertTrue(snapshot.validate("exact.x", "a").valid());
-            assertTrue(snapshot.resolve("exact.x").descriptor().orElseThrow().constraints().get("maximumLength") instanceof BigDecimal);
+            assertTrue(snapshot.resolve("exact.x").descriptor().orElseThrow().constraints()
+                    .get("maximumLength") instanceof BigDecimal);
         }
         rejected(json("{\"id\":\"exact.x\",\"type\":\"TEXT\",\"constraints\":{\"maximumLength\":1.01}}"),
-                 Code.DICTIONARY_ELEMENT_INVALID);
+                Code.DICTIONARY_ELEMENT_INVALID);
     }
 
     @Test
     void malformedUnicodeIsRejectedAtTheCorrectBoundary()
     {
-        rejected(new Source("p", "s", Source.Encoding.JSON, new byte[]{(byte) 0xc0, (byte) 0xaf}),
-                 Code.DICTIONARY_DOCUMENT_INVALID);
+        rejected(new Source("p", "s", Source.Encoding.JSON, new byte[] { (byte) 0xc0, (byte) 0xaf }),
+                Code.DICTIONARY_DOCUMENT_INVALID);
         rejected(yaml("a: \"\\uD800\""), Code.DICTIONARY_DOCUMENT_INVALID);
         var result = catalog("{\"id\":\"unicode.x\",\"type\":\"STRING\"}").validate("unicode.x", "\ud800");
         assertEquals(Code.DICTIONARY_VALUE_TYPE, result.issues().getFirst().code());
@@ -352,8 +358,8 @@ class RuntimeTest
             for (String zone : List.of("Pacific/Apia", "Europe/Madrid", "America/New_York")) {
                 TimeZone.setDefault(TimeZone.getTimeZone(zone));
                 assertEquals("2026-11-15T01:59:59.7654321Z",
-                             snapshot.validate("instant.x",
-                                               "2026-11-14T23:59:59.7654321-02:00").normalizedValue().orElseThrow());
+                        snapshot.validate("instant.x",
+                                "2026-11-14T23:59:59.7654321-02:00").normalizedValue().orElseThrow());
             }
         } finally {
             TimeZone.setDefault(previous);
@@ -375,13 +381,13 @@ class RuntimeTest
     void parserDoesNotCoerceQuotedBoundsOrInvokeExternalReferences()
     {
         rejected(yaml(
-                         "apiVersion: arp.dictionary/v1\nelements: [{id: exact.x, type: DECIMAL, constraints: {minimum: 0.1}}]"),
-                 Code.DICTIONARY_ELEMENT_INVALID);
+                "apiVersion: arp.dictionary/v1\nelements: [{id: exact.x, type: DECIMAL, constraints: {minimum: 0.1}}]"),
+                Code.DICTIONARY_ELEMENT_INVALID);
         rejected(json("{\"id\":\"external.x\",\"type\":\"STRING\",\"$ref\":\"http://127.0.0.1:1/private\"}"),
-                 Code.DICTIONARY_ELEMENT_INVALID);
+                Code.DICTIONARY_ELEMENT_INVALID);
         rejected(yaml(
-                         "apiVersion: arp.dictionary/v1\nelements: [{id: external.x, type: STRING, label: !include file:///etc/passwd}]"),
-                 Code.DICTIONARY_DOCUMENT_INVALID);
+                "apiVersion: arp.dictionary/v1\nelements: [{id: external.x, type: STRING, label: !include file:///etc/passwd}]"),
+                Code.DICTIONARY_DOCUMENT_INVALID);
     }
 
     @Test
@@ -394,29 +400,31 @@ class RuntimeTest
             }
         }
         assertEquals(0,
-                     new BigDecimal(SourceParser.sourceNumber("1." + "0".repeat(254)).toString()).compareTo(BigDecimal.ONE));
+                new BigDecimal(SourceParser.sourceNumber("1." + "0".repeat(254)).toString()).compareTo(BigDecimal.ONE));
         assertEquals(0,
-                     new BigDecimal(SourceParser.sourceNumber("0e" + "0".repeat(200) + "128").toString()).compareTo(
-                             BigDecimal.ZERO));
+                new BigDecimal(SourceParser.sourceNumber("0e" + "0".repeat(200) + "128").toString()).compareTo(
+                        BigDecimal.ZERO));
         assertEquals(0,
-                     new BigDecimal(SourceParser.sourceNumber("9".repeat(128)).toString()).compareTo(new BigDecimal("9".repeat(
-                             128))));
+                new BigDecimal(SourceParser.sourceNumber("9".repeat(128)).toString())
+                        .compareTo(new BigDecimal("9".repeat(
+                                128))));
         assertEquals(0,
-                     new BigDecimal(SourceParser.sourceNumber("1e-128").toString()).compareTo(new BigDecimal("1e-128")));
+                new BigDecimal(SourceParser.sourceNumber("1e-128").toString()).compareTo(new BigDecimal("1e-128")));
     }
 
     @Test
     void yamlRejectsHostEscapesContinuationsAndExplicitBlockIndentation()
     {
         for (String text : List.of("a: \"\\x41\"",
-                                   "a: \"\\N\"",
-                                   "a: \"first\\\n  second\"",
-                                   "a: 'first\n  second'",
-                                   "a: first\n  second",
-                                   "a: |2\n  text\n")) {
+                "a: \"\\N\"",
+                "a: \"first\\\n  second\"",
+                "a: 'first\n  second'",
+                "a: first\n  second",
+                "a: |2\n  text\n")) {
             rejected(yaml(text), Code.DICTIONARY_DOCUMENT_INVALID);
         }
-        var parsed = (Map<?, ?>) new SourceParser(Limits.DEFAULT).parse(yaml("a: \"\\/\\b\\f\\n\\r\\t\\uD83D\\uDE00\""));
+        var parsed = (Map<?, ?>) new SourceParser(Limits.DEFAULT)
+                .parse(yaml("a: \"\\/\\b\\f\\n\\r\\t\\uD83D\\uDE00\""));
         assertEquals("/\b\f\n\r\t😀", parsed.get("a"));
     }
 
@@ -424,7 +432,8 @@ class RuntimeTest
     void yamlBlockChompingAndFoldedParagraphsPreserveText()
     {
         for (String header : List.of("|", "|-", "|+", ">", ">-", ">+")) {
-            var parsed = (Map<?, ?>) new SourceParser(Limits.DEFAULT).parse(yaml("a: " + header + "\n  first\n  second\n\n"));
+            var parsed = (Map<?, ?>) new SourceParser(Limits.DEFAULT)
+                    .parse(yaml("a: " + header + "\n  first\n  second\n\n"));
             String body = header.startsWith("|") ? "first\nsecond" : "first second";
             assertEquals(body + (header.endsWith("-") ? "" : header.endsWith("+") ? "\n\n" : "\n"), parsed.get("a"));
         }
@@ -437,20 +446,22 @@ class RuntimeTest
         ConformanceTest.assertJson(json.readTree("[1,1e127]"), json.readTree("[1.00,10e126]"));
         assertThrows(AssertionError.class, () -> ConformanceTest.assertJson(json.readTree("true"), json.readTree("1")));
         assertThrows(AssertionError.class,
-                     () -> ConformanceTest.assertJson(json.readTree("9007199254740993"),
-                                                      json.readTree("9007199254740992")));
+                () -> ConformanceTest.assertJson(json.readTree("9007199254740993"),
+                        json.readTree("9007199254740992")));
     }
 
     @Test
     void compactSequenceBlockFollowedByPortableScalarPreservesBothFields()
     {
         for (String header : List.of("|", ">-")) {
-            var result = BUILDER.buildCatalog(List.of(yaml("apiVersion: arp.dictionary/v1\nelements:\n  - description: " + header + "\n      first\n      second\n    label: 2025-01-02\n    id: compact.block\n    type: TEXT\n")));
+            var result = BUILDER.buildCatalog(List.of(yaml("apiVersion: arp.dictionary/v1\nelements:\n  - description: "
+                    + header
+                    + "\n      first\n      second\n    label: 2025-01-02\n    id: compact.block\n    type: TEXT\n")));
             assertTrue(result.valid(), () -> result.issues().toString());
             var descriptor = result.catalog().orElseThrow().resolve("compact.block").descriptor().orElseThrow();
             assertEquals("2025-01-02", descriptor.label().orElseThrow());
             assertEquals(header.equals("|") ? "first\nsecond\n" : "first second",
-                         descriptor.description().orElseThrow());
+                    descriptor.description().orElseThrow());
         }
     }
 

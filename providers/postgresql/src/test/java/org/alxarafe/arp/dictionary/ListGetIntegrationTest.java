@@ -48,7 +48,7 @@ class ListGetIntegrationTest
     static void contract() throws Exception
     {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv("ARP_LISTGET_CONTRACT") != null,
-                                                     "Use integration-docker.py --listget-contract for native LISTGET tests");
+                "Use integration-docker.py --listget-contract for native LISTGET tests");
         root = Path.of(System.getenv("ARP_LISTGET_CONTRACT"));
         String pin = Files.readString(Path.of("listget-contract.ref")).trim();
         var process = new ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD").start();
@@ -56,7 +56,7 @@ class ListGetIntegrationTest
         assertEquals(0, process.waitFor());
         products = ConformanceTest.read(root.resolve("fixtures/cds/listget/v1/products.json"));
         ACTIVE = Map.of("catalog", target("catalog"), "reports", target("summary"),
-                        "identified", target("identified"));
+                "identified", target("identified"));
         try (var c = connect(); var s = c.createStatement()) {
             try (var r = s.executeQuery("SHOW server_version")) {
                 assertTrue(r.next());
@@ -72,9 +72,9 @@ class ListGetIntegrationTest
     private static Connection connect() throws java.sql.SQLException
     {
         return DriverManager.getConnection("jdbc:postgresql://" + System.getenv("ARP_DB_HOST")
-                                                   + ":5432/arpcds?connectTimeout=3&socketTimeout=10",
-                                           "arpcds",
-                                           System.getenv("ARP_DB_PASSWORD"));
+                + ":5432/arpcds?connectTimeout=3&socketTimeout=10",
+                "arpcds",
+                System.getenv("ARP_DB_PASSWORD"));
     }
 
     private static void exec(String sql) throws Exception
@@ -101,54 +101,53 @@ class ListGetIntegrationTest
         var connection = connect();
         harness.openConnections.incrementAndGet();
         var selected = new AtomicBoolean();
-        return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(), new Class<?>[]{Connection.class},
-                                                   (proxy, method, args) -> {
-                                                       String name = method.getName();
-                                                       if (name.equals("commit") && selected.get()) {
-                                                           harness.commitAttempts++;
-                                                           if (harness.failCommit) {
-                                                               throw new java.sql.SQLException("private commit failure");
-                                                           }
-                                                           Object result = reflect(connection, method, args);
-                                                           harness.afterCommit.run();
-                                                           return result;
-                                                       }
-                                                       if (name.equals("close")) {
-                                                           Object result = reflect(connection, method, args);
-                                                           harness.openConnections.decrementAndGet();
-                                                           if (selected.get() ? harness.failClose : harness.failGuardClose) {
-                                                               throw new java.sql.SQLException("private close failure");
-                                                           }
-                                                           return result;
-                                                       }
-                                                       if (name.equals("rollback") && !selected.get() && harness.failGuardRollback) {
-                                                           reflect(connection, method, args);
-                                                           throw new java.sql.SQLException(
-                                                                   "private mandatory guard rollback failure");
-                                                       }
-                                                       Object value = reflect(connection, method, args);
-                                                       if (name.equals("prepareStatement") && ((String) args[0]).contains(
-                                                               " FROM ONLY "))
-                                                       {
-                                                           selected.set(true);
-                                                           SQL.add((String) args[0]);
-                                                           return Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
-                                                                                         new Class<?>[]{PreparedStatement.class},
-                                                                                         (p, m, a) -> {
-                                                                                             Object result = reflect(
-                                                                                                     value,
-                                                                                                     m,
-                                                                                                     a);
-                                                                                             if (m.getName().equals(
-                                                                                                     "executeQuery"))
-                                                                                             {
-                                                                                                 harness.afterQuery.run();
-                                                                                             }
-                                                                                             return result;
-                                                                                         });
-                                                       }
-                                                       return value;
-                                                   });
+        return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                new Class<?>[] { Connection.class },
+                (proxy, method, args) -> {
+                    String name = method.getName();
+                    if (name.equals("commit") && selected.get()) {
+                        harness.commitAttempts++;
+                        if (harness.failCommit) {
+                            throw new java.sql.SQLException("private commit failure");
+                        }
+                        Object result = reflect(connection, method, args);
+                        harness.afterCommit.run();
+                        return result;
+                    }
+                    if (name.equals("close")) {
+                        Object result = reflect(connection, method, args);
+                        harness.openConnections.decrementAndGet();
+                        if (selected.get() ? harness.failClose : harness.failGuardClose) {
+                            throw new java.sql.SQLException("private close failure");
+                        }
+                        return result;
+                    }
+                    if (name.equals("rollback") && !selected.get() && harness.failGuardRollback) {
+                        reflect(connection, method, args);
+                        throw new java.sql.SQLException(
+                                "private mandatory guard rollback failure");
+                    }
+                    Object value = reflect(connection, method, args);
+                    if (name.equals("prepareStatement") && ((String) args[0]).contains(
+                            " FROM ONLY ")) {
+                        selected.set(true);
+                        SQL.add((String) args[0]);
+                        return Proxy.newProxyInstance(PreparedStatement.class.getClassLoader(),
+                                new Class<?>[] { PreparedStatement.class },
+                                (p, m, a) -> {
+                                    Object result = reflect(
+                                            value,
+                                            m,
+                                            a);
+                                    if (m.getName().equals(
+                                            "executeQuery")) {
+                                        harness.afterQuery.run();
+                                    }
+                                    return result;
+                                });
+                    }
+                    return value;
+                });
     }
 
     @SuppressWarnings("unchecked")
@@ -168,16 +167,13 @@ class ListGetIntegrationTest
         };
         boolean failCommit, failClose, failGuardRollback, failGuardClose;
         int commitAttempts;
-        final java.util.concurrent.atomic.AtomicInteger openConnections =
-                new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.atomic.AtomicInteger openConnections = new java.util.concurrent.atomic.AtomicInteger();
         Runnable onAuthorize = () -> {
         };
-        final java.util.concurrent.atomic.AtomicReference<String> currentPolicy =
-                new java.util.concurrent.atomic.AtomicReference<>();
-        final java.util.concurrent.atomic.AtomicReference<String> tenant =
-                new java.util.concurrent.atomic.AtomicReference<>("7");
-        final java.util.concurrent.atomic.AtomicReference<String> product =
-                new java.util.concurrent.atomic.AtomicReference<>();
+        final java.util.concurrent.atomic.AtomicReference<String> currentPolicy = new java.util.concurrent.atomic.AtomicReference<>();
+        final java.util.concurrent.atomic.AtomicReference<String> tenant = new java.util.concurrent.atomic.AtomicReference<>(
+                "7");
+        final java.util.concurrent.atomic.AtomicReference<String> product = new java.util.concurrent.atomic.AtomicReference<>();
 
         Map<String, Object> restriction()
         {
@@ -211,22 +207,22 @@ class ListGetIntegrationTest
             layout = products.at("/layouts/" + name);
             String pk = name.equals("composite") ? "tenant_id,product_id" : "product_id";
             exec("CREATE SCHEMA IF NOT EXISTS commerce; DROP TABLE IF EXISTS commerce.products; "
-                         + "CREATE TABLE commerce.products(tenant_id integer NOT NULL,product_id bigint NOT NULL,"
-                         + "sku varchar(40) NOT NULL,name varchar(200) NOT NULL,price numeric NOT NULL,"
-                         + "rating smallint NOT NULL,description text,available boolean NOT NULL,released date NOT NULL,"
-                         + "cost numeric NOT NULL,internal_note text, PRIMARY KEY(" + pk + "))");
-            try (var c = connect(); var insert = c.prepareStatement("INSERT INTO commerce.products VALUES "
-                                                                            + "(?,?,?, ?,?,?, ?,?,?, ?,?)"))
-            {
+                    + "CREATE TABLE commerce.products(tenant_id integer NOT NULL,product_id bigint NOT NULL,"
+                    + "sku varchar(40) NOT NULL,name varchar(200) NOT NULL,price numeric NOT NULL,"
+                    + "rating smallint NOT NULL,description text,available boolean NOT NULL,released date NOT NULL,"
+                    + "cost numeric NOT NULL,internal_note text, PRIMARY KEY(" + pk + "))");
+            try (var c = connect();
+                    var insert = c.prepareStatement("INSERT INTO commerce.products VALUES "
+                            + "(?,?,?, ?,?,?, ?,?,?, ?,?)")) {
                 for (var row : layout.get("rows")) {
                     var v = row.get("values");
                     int i = 1;
                     for (String col : List.of("tenant_id", "product_id", "sku", "name", "price", "rating",
-                                              "description", "available", "released", "cost", "internal_note")) {
+                            "description", "available", "released", "cost", "internal_note")) {
                         var n = v.get(col);
                         Object value = n.isNull() ? null : switch (col) {
                             case "tenant_id", "product_id", "price", "rating", "cost" ->
-                                    new java.math.BigDecimal(n.asText());
+                                new java.math.BigDecimal(n.asText());
                             case "available" -> n.asBoolean();
                             case "released" -> java.time.LocalDate.parse(n.asText());
                             default -> n.asText();
@@ -249,34 +245,36 @@ class ListGetIntegrationTest
             Catalog dictionary = new CatalogBuilder().buildCatalog(List.of(ConformanceTest.source(
                     dictionaryDocument))).catalog().orElseThrow();
             physical = new PhysicalCatalog(dictionary, definitions, Map.of("observed",
-                                                                           new PostgreSqlObservationProvider(
-                                                                                   ListGetIntegrationTest::connect,
-                                                                                   "commercial-db",
-                                                                                   "storage.products",
-                                                                                   "commerce",
-                                                                                   "products",
-                                                                                   5)));
+                    new PostgreSqlObservationProvider(
+                            ListGetIntegrationTest::connect,
+                            "commercial-db",
+                            "storage.products",
+                            "commerce",
+                            "products",
+                            5)));
             var executor = new PostgreSqlRecordReader(() -> monitored(this), timeoutSeconds);
             host = new ListGetHost(physical, executor,
-                                   ACTIVE, (target, operation, context) -> {
-                onAuthorize.run();
-                String revision = currentPolicy.get();
-                return new ListGetHost.Access(
-                        (operation.equals("GET") ? allowGet.get() : allowList.get())
-                                && (revision == null || revision.equals(context.policyRevision())),
-                        allowFields.get() ? Set.of("tenant_id",
-                                                   "product_id",
-                                                   "sku",
-                                                   "name",
-                                                   "price",
-                                                   "rating",
-                                                   "description",
-                                                   "available",
-                                                   "released",
-                                                   "cost",
-                                                   "internal_note") : Set.of("sku"),
-                        capability.get() ? restriction() : null);
-            });
+                    ACTIVE, (target, operation, context) -> {
+                        onAuthorize.run();
+                        String revision = currentPolicy.get();
+                        return new ListGetHost.Access(
+                                (operation.equals("GET") ? allowGet.get() : allowList.get())
+                                        && (revision == null || revision.equals(context.policyRevision())),
+                                allowFields.get()
+                                        ? Set.of("tenant_id",
+                                                "product_id",
+                                                "sku",
+                                                "name",
+                                                "price",
+                                                "rating",
+                                                "description",
+                                                "available",
+                                                "released",
+                                                "cost",
+                                                "internal_note")
+                                        : Set.of("sku"),
+                                capability.get() ? restriction() : null);
+                    });
             assertTrue(physical.resolve().valid(), physical.resolve().toJson());
             SQL.clear();
         }
@@ -303,7 +301,7 @@ class ListGetIntegrationTest
             for (var k : layout.at("/definitions/physical/observed/primaryKey")) {
                 String key = k.asText();
                 out.add(Map.of("field", key, "type", key.equals("tenant_id") ? "INT32" : "INT64",
-                               "value", row.get("values").get(key).asText()));
+                        "value", row.get("values").get(key).asText()));
             }
             return Map.of("components", out);
         }
@@ -384,7 +382,7 @@ class ListGetIntegrationTest
                     assertEquals(row.at("/values/product_id"), found.at("/record/values/product_id"));
                 }
                 assertTrue(ok(h.call("identified", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0))),
-                                     new ListGetHost.Context("public", "public-1"))).path("found").asBoolean());
+                        new ListGetHost.Context("public", "public-1"))).path("found").asBoolean());
                 for (int i = 0; i < seen.size(); i++) {
                     var expected = ConformanceTest.JSON.createObjectNode();
                     var row = h.layout.get("rows").get(i).get("values");
@@ -403,59 +401,59 @@ class ListGetIntegrationTest
                 var identified = ok(h.call("identified", "LIST", Map.of("limit", 100)));
                 assertEquals(3, identified.at("/page/limit").asInt());
                 assertEquals(h.layout.at("/rows/0/values/product_id").asText(),
-                             identified.at("/records/0/values/product_id").asText());
+                        identified.at("/records/0/values/product_id").asText());
             }));
             tests.add(DynamicTest.dynamicTest(layout
-                                                      + " absent and inaccessible indistinguishable; reports derived",
-                                              () -> {
-                                                  var h = new Harness(layout);
-                                                  var row = h.layout.get("rows").get(0).deepCopy();
-                                                  ((com.fasterxml.jackson.databind.node.ObjectNode) row.get("values")).put(
-                                                          "product_id",
-                                                          "999");
-                                                  var missing = ok(h.call("identified",
-                                                                          "GET",
-                                                                          Map.of("key", h.publicKey(row))));
-                                                  var denied = ok(h.call("identified",
-                                                                         "GET",
-                                                                         Map.of("key",
-                                                                                h.publicKey(h.layout.get("rows").get(5)))));
-                                                  assertEquals(missing, denied);
-                                                  assertFalse(missing.get("found").asBoolean());
-                                                  var summary = ok(h.call("reports", "LIST", Map.of()));
-                                                  assertEquals(Set.of("sku", "name"), ConformanceTest.JSON.convertValue(
-                                                          summary.at("/records/0/values"), Map.class).keySet());
-                                                  int queries = SQL.size();
-                                                  error(h.call("reports", "GET", Map.of()), "UNAVAILABLE");
-                                                  assertEquals(queries, SQL.size());
-                                              }));
+                    + " absent and inaccessible indistinguishable; reports derived",
+                    () -> {
+                        var h = new Harness(layout);
+                        var row = h.layout.get("rows").get(0).deepCopy();
+                        ((com.fasterxml.jackson.databind.node.ObjectNode) row.get("values")).put(
+                                "product_id",
+                                "999");
+                        var missing = ok(h.call("identified",
+                                "GET",
+                                Map.of("key", h.publicKey(row))));
+                        var denied = ok(h.call("identified",
+                                "GET",
+                                Map.of("key",
+                                        h.publicKey(h.layout.get("rows").get(5)))));
+                        assertEquals(missing, denied);
+                        assertFalse(missing.get("found").asBoolean());
+                        var summary = ok(h.call("reports", "LIST", Map.of()));
+                        assertEquals(Set.of("sku", "name"), ConformanceTest.JSON.convertValue(
+                                summary.at("/records/0/values"), Map.class).keySet());
+                        int queries = SQL.size();
+                        error(h.call("reports", "GET", Map.of()), "UNAVAILABLE");
+                        assertEquals(queries, SQL.size());
+                    }));
             tests.add(DynamicTest.dynamicTest(layout
-                                                      + " authorization, inactive modules and unsupported policy fail closed",
-                                              () -> {
-                                                  var h = new Harness(layout);
-                                                  h.allowGet.set(false);
-                                                  error(h.call("catalog", "GET", Map.of()), "UNAVAILABLE");
-                                                  assertTrue(SQL.isEmpty());
-                                                  ok(h.call("catalog", "LIST", Map.of()));
-                                                  h.allowGet.set(true);
-                                                  h.allowList.set(false);
-                                                  error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
-                                                  h.allowList.set(true);
-                                                  h.allowFields.set(false);
-                                                  SQL.clear();
-                                                  error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
-                                                  assertTrue(SQL.isEmpty());
-                                                  h.allowFields.set(true);
-                                                  h.capability.set(false);
-                                                  error(h.call("catalog", "LIST", Map.of()), "CAPABILITY_UNAVAILABLE");
-                                                  assertTrue(SQL.isEmpty());
-                                                  h.capability.set(true);
-                                                  h.host.changeAccess(Map.of("catalog", ACTIVE.get("catalog")), () -> {
-                                                  });
-                                                  error(h.call("reports", "LIST", Map.of()), "UNAVAILABLE");
-                                                  assertTrue(SQL.isEmpty());
-                                                  ok(h.call("catalog", "LIST", Map.of()));
-                                              }));
+                    + " authorization, inactive modules and unsupported policy fail closed",
+                    () -> {
+                        var h = new Harness(layout);
+                        h.allowGet.set(false);
+                        error(h.call("catalog", "GET", Map.of()), "UNAVAILABLE");
+                        assertTrue(SQL.isEmpty());
+                        ok(h.call("catalog", "LIST", Map.of()));
+                        h.allowGet.set(true);
+                        h.allowList.set(false);
+                        error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
+                        h.allowList.set(true);
+                        h.allowFields.set(false);
+                        SQL.clear();
+                        error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
+                        assertTrue(SQL.isEmpty());
+                        h.allowFields.set(true);
+                        h.capability.set(false);
+                        error(h.call("catalog", "LIST", Map.of()), "CAPABILITY_UNAVAILABLE");
+                        assertTrue(SQL.isEmpty());
+                        h.capability.set(true);
+                        h.host.changeAccess(Map.of("catalog", ACTIVE.get("catalog")), () -> {
+                        });
+                        error(h.call("reports", "LIST", Map.of()), "UNAVAILABLE");
+                        assertTrue(SQL.isEmpty());
+                        ok(h.call("catalog", "LIST", Map.of()));
+                    }));
             tests.add(DynamicTest.dynamicTest(layout + " opaque bindings, tampering, limit and generation", () -> {
                 var h = new Harness(layout);
                 var page = ok(h.call("catalog", "LIST", Map.of()));
@@ -463,15 +461,15 @@ class ListGetIntegrationTest
                 String cursor = page.at("/page/next").asText();
                 var other = new ListGetHost.Context("other/company-8", "policy-1");
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", ref)), other))
-                                    .get("found").asBoolean());
+                        .get("found").asBoolean());
                 error(h.call("catalog", "LIST", Map.of("continuation", cursor), other), "INVALID_CURSOR");
                 error(h.call("reports", "LIST", Map.of("continuation", cursor)), "INVALID_CURSOR");
                 error(h.call("catalog", "LIST", Map.of("continuation", ref)), "INVALID_CURSOR");
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", cursor))))
-                                    .get("found").asBoolean());
+                        .get("found").asBoolean());
                 error(h.call("catalog", "LIST", Map.of("continuation", cursor, "limit", 3)), "INVALID_CURSOR");
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", ref + "x"))))
-                                    .get("found").asBoolean());
+                        .get("found").asBoolean());
                 error(h.call("catalog", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0)))), "INVALID_KEY");
                 h.physical.invalidate();
                 error(h.call("catalog", "GET", Map.of("key", Map.of("reference", ref))), "GENERATION_EXPIRED");
@@ -479,34 +477,34 @@ class ListGetIntegrationTest
                 ok(h.call("catalog", "LIST", Map.of()));
             }));
             tests.add(DynamicTest.dynamicTest(layout
-                                                      + " no output on inflight invalidation, module or policy change",
-                                              () -> {
-                                                  var h = new Harness(layout);
-                                                  h.afterQuery = h.physical::invalidate;
-                                                  error(h.call("catalog", "LIST", Map.of()), "GENERATION_CHANGED");
-                                                  assertFalse(SQL.isEmpty());
-                                                  var missing = h.layout.get("rows").get(0).deepCopy();
-                                                  ((com.fasterxml.jackson.databind.node.ObjectNode) missing.get("values")).put(
-                                                          "product_id",
-                                                          "999");
-                                                  error(h.call("identified",
-                                                               "GET",
-                                                               Map.of("key", h.publicKey(missing))),
-                                                        "GENERATION_CHANGED");
-                                                  h.afterQuery = () -> {
-                                                  };
-                                                  ok(h.call("catalog", "LIST", Map.of()));
-                                                  h.afterQuery = () -> h.host.changeAccess(Map.of("catalog",
-                                                                                                  ACTIVE.get("catalog")),
-                                                                                           () -> {
-                                                                                           });
-                                                  error(h.call("reports", "LIST", Map.of()), "GENERATION_CHANGED");
-                                                  h.host.changeAccess(ACTIVE, () -> {
-                                                  });
-                                                  h.afterQuery = () -> h.host.changeAccess(ACTIVE,
-                                                                                           () -> h.allowList.set(false));
-                                                  error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
-                                              }));
+                    + " no output on inflight invalidation, module or policy change",
+                    () -> {
+                        var h = new Harness(layout);
+                        h.afterQuery = h.physical::invalidate;
+                        error(h.call("catalog", "LIST", Map.of()), "GENERATION_CHANGED");
+                        assertFalse(SQL.isEmpty());
+                        var missing = h.layout.get("rows").get(0).deepCopy();
+                        ((com.fasterxml.jackson.databind.node.ObjectNode) missing.get("values")).put(
+                                "product_id",
+                                "999");
+                        error(h.call("identified",
+                                "GET",
+                                Map.of("key", h.publicKey(missing))),
+                                "GENERATION_CHANGED");
+                        h.afterQuery = () -> {
+                        };
+                        ok(h.call("catalog", "LIST", Map.of()));
+                        h.afterQuery = () -> h.host.changeAccess(Map.of("catalog",
+                                ACTIVE.get("catalog")),
+                                () -> {
+                                });
+                        error(h.call("reports", "LIST", Map.of()), "GENERATION_CHANGED");
+                        h.host.changeAccess(ACTIVE, () -> {
+                        });
+                        h.afterQuery = () -> h.host.changeAccess(ACTIVE,
+                                () -> h.allowList.set(false));
+                        error(h.call("catalog", "LIST", Map.of()), "UNAVAILABLE");
+                    }));
             tests.add(DynamicTest.dynamicTest(layout + " metadata rebuild, external DDL and provider failure", () -> {
                 var h = new Harness(layout);
                 String before = JsonSupport.write(h.definitions);
@@ -537,11 +535,11 @@ class ListGetIntegrationTest
             tests.add(DynamicTest.dynamicTest(layout + " strict input and SQL bounds", () -> {
                 var h = new Harness(layout);
                 for (var input : List.of(Map.of("offset", 1),
-                                         Map.of("limit", false),
-                                         Map.of("limit", 0),
-                                         Map.of("limit", 101),
-                                         Map.of("limit", 1.5),
-                                         Map.of("sql", "DROP TABLE commerce.products"))) {
+                        Map.of("limit", false),
+                        Map.of("limit", 0),
+                        Map.of("limit", 101),
+                        Map.of("limit", 1.5),
+                        Map.of("sql", "DROP TABLE commerce.products"))) {
                     error(h.call("catalog", "LIST", (Map) input), "INPUT_SHAPE");
                 }
                 assertTrue(SQL.isEmpty());
@@ -581,19 +579,20 @@ class ListGetIntegrationTest
                 var vector = vectors.get(i);
                 var request = vector.get("request").deepCopy();
                 String target = vector.at("/host/projection").asText().equals("products.identified")
-                        ? "identified" : "catalog";
+                        ? "identified"
+                        : "catalog";
                 ((com.fasterxml.jackson.databind.node.ObjectNode) request).put("target", target);
                 h.allowList.set(i != 50);
                 SQL.clear();
                 var actual = h.host.invoke(ConformanceTest.JSON.writeValueAsBytes(request), CONTEXT);
                 assertEquals(vector.at("/expected/response"), ConformanceTest.JSON.valueToTree(actual),
-                             vector.path("id").asText());
+                        vector.path("id").asText());
                 assertTrue(SQL.isEmpty(), vector.path("id").asText());
                 System.out.println("LISTGET_NATIVE_VECTOR:" + vector.path("id").asText());
             }
             // Malformed component objects must also be client errors, never provider failures.
             for (String key : List.of("{\"components\":[null,null]}",
-                                      "{\"components\":[1,2]}", "{\"components\":[[],{}]}")) {
+                    "{\"components\":[1,2]}", "{\"components\":[[],{}]}")) {
                 var request = "{\"target\":\"identified\",\"operation\":\"GET\",\"inputs\":{\"key\":" + key + "}}";
                 error(ConformanceTest.JSON.valueToTree(h.host.invoke(request.getBytes(), CONTEXT)), "INVALID_KEY");
             }
@@ -639,7 +638,7 @@ class ListGetIntegrationTest
             };
             SQL.clear();
             error(h.call("catalog", "GET", Map.of("key", Map.of("reference", "rec-unknown-unissued"))),
-                  "GENERATION_CHANGED");
+                    "GENERATION_CHANGED");
             assertTrue(SQL.isEmpty());
         }));
         tests.add(DynamicTest.dynamicTest("review independent token bindings and access revocation", () -> {
@@ -650,12 +649,12 @@ class ListGetIntegrationTest
             String cursor = page.at("/page/next").asText();
             assertTrue(reference.length() <= 128 && cursor.length() <= 128);
             for (var context : List.of(new ListGetHost.Context("different-reader/company-7", "policy-1"),
-                                       new ListGetHost.Context("reader/company-8", "policy-1"),
-                                       new ListGetHost.Context("reader/company-7", "policy-2"))) {
+                    new ListGetHost.Context("reader/company-8", "policy-1"),
+                    new ListGetHost.Context("reader/company-7", "policy-2"))) {
                 assertFalse(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", reference)), context))
-                                    .path("found").asBoolean());
+                        .path("found").asBoolean());
                 error(h.call("catalog", "LIST", Map.of("limit", 1, "continuation", cursor), context),
-                      "INVALID_CURSOR");
+                        "INVALID_CURSOR");
             }
             h.afterQuery = () -> h.host.changeAccess(ACTIVE, () -> h.allowGet.set(false));
             error(h.call("catalog", "GET", Map.of("key", Map.of("reference", reference))), "UNAVAILABLE");
@@ -679,11 +678,11 @@ class ListGetIntegrationTest
             var catalogPage = ok(projections.call("catalog", "LIST", Map.of()));
             String catalogRef = catalogPage.at("/records/0/key/reference").asText();
             assertFalse(ok(projections.call("reports", "GET", Map.of("key", Map.of("reference", catalogRef))))
-                                .path("found").asBoolean());
+                    .path("found").asBoolean());
             var reportsPage = ok(projections.call("reports", "LIST", Map.of()));
             String reportsRef = reportsPage.at("/records/0/key/reference").asText();
             assertTrue(ok(projections.call("reports", "GET", Map.of("key", Map.of("reference", reportsRef))))
-                               .path("found").asBoolean());
+                    .path("found").asBoolean());
         }));
         tests.add(DynamicTest.dynamicTest("review concurrent invalidation and real DDL exclusion", () -> {
             var h = new Harness("composite");
@@ -733,27 +732,27 @@ class ListGetIntegrationTest
         }));
         tests.add(DynamicTest.dynamicTest("review PK capacity and incompatible storage boundaries", () -> {
             var h = new Harness("composite");
-            assertThrows(IllegalArgumentException.class, () ->
-                    new ListGetHost.Target("products.catalog", 2, 0, ACTIVE.get("catalog").fields()));
+            assertThrows(IllegalArgumentException.class,
+                    () -> new ListGetHost.Target("products.catalog", 2, 0, ACTIVE.get("catalog").fields()));
             var keys = new ArrayList<>(List.of("tenant_id", "product_id"));
             for (int i = 3; i <= 7; i++) {
                 exec("ALTER TABLE commerce.products ADD COLUMN key_" + i + " integer NOT NULL DEFAULT 0");
                 keys.add("key_" + i);
             }
             exec("ALTER TABLE commerce.products DROP CONSTRAINT products_pkey, ADD PRIMARY KEY("
-                         + String.join(",", keys) + ")");
+                    + String.join(",", keys) + ")");
             h.physical.invalidate();
             var page = ok(h.call("catalog", "LIST", Map.of()));
             String reference = page.at("/records/0/key/reference").asText();
             String cursor = page.at("/page/next").asText();
             assertTrue(reference.length() <= 128 && cursor.length() <= 128);
             assertTrue(ok(h.call("catalog", "GET", Map.of("key", Map.of("reference", reference))))
-                               .path("found").asBoolean());
+                    .path("found").asBoolean());
             ok(h.call("catalog", "LIST", Map.of("continuation", cursor)));
             exec("ALTER TABLE commerce.products ADD COLUMN key_8 integer NOT NULL DEFAULT 0");
             keys.add("key_8");
             exec("ALTER TABLE commerce.products DROP CONSTRAINT products_pkey, ADD PRIMARY KEY("
-                         + String.join(",", keys) + ")");
+                    + String.join(",", keys) + ")");
             h.physical.invalidate();
             SQL.clear();
             error(h.call("catalog", "LIST", Map.of()), "CAPABILITY_UNAVAILABLE");
@@ -763,7 +762,7 @@ class ListGetIntegrationTest
             error(h.call("catalog", "LIST", Map.of()), "CAPABILITY_UNAVAILABLE");
             assertTrue(SQL.isEmpty());
             exec("DELETE FROM commerce.products WHERE product_id > 32767; "
-                         + "ALTER TABLE commerce.products ALTER COLUMN product_id TYPE smallint");
+                    + "ALTER TABLE commerce.products ALTER COLUMN product_id TYPE smallint");
             h.physical.invalidate();
             error(h.call("catalog", "LIST", Map.of()), "INCOMPATIBLE_STORAGE");
             assertTrue(SQL.isEmpty());
@@ -808,7 +807,7 @@ class ListGetIntegrationTest
                 h.failCommit = true;
                 error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
                 error(h.call("identified", "GET", Map.of("key", h.publicKey(h.layout.get("rows").get(0)))),
-                      "READ_FAILED");
+                        "READ_FAILED");
                 h.tenant.set("999");
                 error(h.call("catalog", "LIST", Map.of()), "READ_FAILED");
                 assertEquals(3, h.commitAttempts);
@@ -847,7 +846,7 @@ class ListGetIntegrationTest
                 pending.set(executor.submit(() -> {
                     try {
                         exec("SET lock_timeout='5s'; /*ARP_SQL_JAVA_QUEUED*/ "
-                                     + "ALTER TABLE commerce.products ADD COLUMN queued_change text");
+                                + "ALTER TABLE commerce.products ADD COLUMN queued_change text");
                     } catch (Exception error) {
                         throw new RuntimeException(error);
                     }
@@ -857,8 +856,7 @@ class ListGetIntegrationTest
                     boolean queued = false;
                     while (!queued && System.nanoTime() < deadline) {
                         try (var rows = statement.executeQuery("SELECT EXISTS(SELECT 1 FROM pg_stat_activity "
-                                                                       + "WHERE query LIKE '%ARP_SQL_JAVA_QUEUED%' AND wait_event_type='Lock')"))
-                        {
+                                + "WHERE query LIKE '%ARP_SQL_JAVA_QUEUED%' AND wait_event_type='Lock')")) {
                             assertTrue(rows.next());
                             queued = rows.getBoolean(1);
                         }
@@ -895,15 +893,15 @@ class ListGetIntegrationTest
             }
             assertEquals(SqlRecordReader.class, PostgreSqlRecordReader.class.getSuperclass());
             assertTrue(java.lang.reflect.Modifier.isFinal(SqlRecordReader.class.getMethod("open",
-                                                                                          ReadPlan.class,
-                                                                                          java.util.function.BooleanSupplier.class).getModifiers()));
+                    ReadPlan.class,
+                    java.util.function.BooleanSupplier.class).getModifiers()));
             assertTrue(java.lang.reflect.Modifier.isFinal(SqlRecordReader.class.getMethod("prepare",
-                                                                                          CdsReadResult.class,
-                                                                                          String.class,
-                                                                                          Map.class).getModifiers()));
+                    CdsReadResult.class,
+                    String.class,
+                    Map.class).getModifiers()));
             var reader = new InheritedReader();
             var prepared = reader.prepare(h.physical.current().orElseThrow(), "products.catalog",
-                                          Map.of("tenant_id", "7"));
+                    Map.of("tenant_id", "7"));
             try (var attempt = reader.open(new ReadPlan(prepared, null, false, 2), () -> true)) {
                 assertEquals(3, attempt.rows().size());
                 assertEquals("7.95", attempt.rows().getFirst().values().get("price"));

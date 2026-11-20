@@ -22,17 +22,14 @@ public final class ListGetHost
     /**
      * Binding includes principal/tenant and policy revision; the caller supplies it, never the request.
      */
-    public record Context(String identity, String policyRevision)
-    {
+    public record Context(String identity, String policyRevision) {
     }
 
     /**
      * Complete field grant plus equality restrictions; null means an unsupported policy, not unrestricted.
      */
-    public record Access(boolean allowed, Set<String> fields, Map<String, Object> equalities)
-    {
-        public Access
-        {
+    public record Access(boolean allowed, Set<String> fields, Map<String, Object> equalities) {
+        public Access {
             fields = Set.copyOf(fields);
             equalities = equalities == null ? null : Map.copyOf(equalities);
         }
@@ -44,10 +41,8 @@ public final class ListGetHost
         Access authorize(String target, String operation, Context context);
     }
 
-    public record Target(String projection, int defaultLimit, int maxLimit, Set<String> fields)
-    {
-        public Target
-        {
+    public record Target(String projection, int defaultLimit, int maxLimit, Set<String> fields) {
+        public Target {
             fields = Set.copyOf(fields);
             if (defaultLimit < 1 || defaultLimit > maxLimit || maxLimit > 100) {
                 throw new IllegalArgumentException("Invalid server limits");
@@ -188,17 +183,17 @@ public final class ListGetHost
             need(!keys.isEmpty() && keys.size() <= 7, "CAPABILITY_UNAVAILABLE");
             long generation = catalog.publishRead(snapshot, catalog::generation);
             var binding = Map.<String, Object>of("target",
-                                                 target,
-                                                 "projection",
-                                                 registration.projection(),
-                                                 "identity",
-                                                 context.identity(),
-                                                 "policy",
-                                                 context.policyRevision(),
-                                                 "accessEpoch",
-                                                 Long.toString(epoch),
-                                                 "generation",
-                                                 Long.toString(generation));
+                    target,
+                    "projection",
+                    registration.projection(),
+                    "identity",
+                    context.identity(),
+                    "policy",
+                    context.policyRevision(),
+                    "accessEpoch",
+                    Long.toString(epoch),
+                    "generation",
+                    Long.toString(generation));
             var inputs = map(request.get("inputs"));
             boolean get = operation.equals("GET"), opaque = !fieldNames.containsAll(keys);
             int limit = registration.defaultLimit();
@@ -210,7 +205,7 @@ public final class ListGetHost
                 var key = map(inputs.get("key"));
                 if (opaque) {
                     need(key.keySet().equals(Set.of("reference")) && key.get("reference") instanceof String,
-                         "INVALID_KEY");
+                            "INVALID_KEY");
                     String reference = (String) key.get("reference");
                     need(!reference.isEmpty() && reference.length() <= 128, "INVALID_KEY");
                     var decoded = open(reference, binding, "GET");
@@ -221,7 +216,7 @@ public final class ListGetHost
                     }
                 } else {
                     need(key.keySet().equals(Set.of("components")) && key.get("components") instanceof List<?>,
-                         "INVALID_KEY");
+                            "INVALID_KEY");
                     var components = (List<?>) key.get("components");
                     need(components.size() == keys.size(), "INVALID_KEY");
                     position = new ArrayList<>();
@@ -229,8 +224,8 @@ public final class ListGetHost
                         need(components.get(i) instanceof Map<?, ?>, "INVALID_KEY");
                         var c = map(components.get(i));
                         need(c.keySet().equals(Set.of("field", "type", "value"))
-                                     && keys.get(i).equals(c.get("field"))
-                                     && keyTypes.get(i).name().equals(c.get("type")), "INVALID_KEY");
+                                && keys.get(i).equals(c.get("field"))
+                                && keyTypes.get(i).name().equals(c.get("type")), "INVALID_KEY");
                         var decoded = ScalarValidator.read(keyTypes.get(i), c.get("value"));
                         need(decoded.valid(), "INVALID_KEY");
                         position.add((String) decoded.normalizedValue().orElseThrow());
@@ -243,7 +238,7 @@ public final class ListGetHost
                     need(Numbers.integral(value), "INPUT_SHAPE");
                     var n = Numbers.metadata(value);
                     need(n.compareTo(BigDecimal.ONE) >= 0 && n.compareTo(BigDecimal.valueOf(100)) <= 0,
-                         "INPUT_SHAPE");
+                            "INPUT_SHAPE");
                     limit = Math.min(n.intValueExact(), registration.maxLimit());
                 }
                 if (inputs.containsKey("continuation")) {
@@ -254,55 +249,57 @@ public final class ListGetHost
                 }
             }
             final int effectiveLimit = limit;
-            java.util.function.BiFunction<List<ReadPlan.Row>, ReadAttempt, Map<String, Object>> publish =
-                    (rows, attempt) -> {
-                        // Validate even internal/hidden PKs before any row or token may escape.
-                        for (var row : rows) {
-                            for (int i = 0; i < keys.size(); i++) {
-                                need(ScalarValidator.read(keyTypes.get(i), row.key().get(i)).valid(),
-                                     "ROW_IDENTITY_INVALID");
-                            }
+            java.util.function.BiFunction<List<ReadPlan.Row>, ReadAttempt, Map<String, Object>> publish = (rows,
+                    attempt) -> {
+                // Validate even internal/hidden PKs before any row or token may escape.
+                for (var row : rows) {
+                    for (int i = 0; i < keys.size(); i++) {
+                        need(ScalarValidator.read(keyTypes.get(i), row.key().get(i)).valid(),
+                                "ROW_IDENTITY_INVALID");
+                    }
+                }
+                synchronized (gate) {
+                    need(registration.equals(active.get(target)), "GENERATION_CHANGED");
+                    var finalAccess = access(target, operation, context, fieldNames);
+                    need(initial.equals(finalAccess), "UNAVAILABLE");
+                    need(policyGeneration == epoch, "GENERATION_CHANGED");
+                    return catalog.publishRead(snapshot, () -> {
+                        Map<String, Object> response;
+                        if (get) {
+                            need(rows.size() <= 1, "ROW_IDENTITY_INVALID");
+                            response = success(rows.isEmpty()
+                                    ? Map.of("found", false)
+                                    : Map.of("found", true, "record",
+                                            record(rows.getFirst(),
+                                                    keys,
+                                                    keyTypes,
+                                                    opaque,
+                                                    binding)));
+                        } else {
+                            boolean more = rows.size() > effectiveLimit;
+                            var visible = rows.subList(0, Math.min(effectiveLimit, rows.size()));
+                            var records = visible.stream()
+                                    .map(r -> record(r, keys, keyTypes, opaque, binding)).toList();
+                            var page = new LinkedHashMap<String, Object>();
+                            page.put("limit", effectiveLimit);
+                            page.put("hasMore", more);
+                            page.put("next", more
+                                    ? seal(binding, "LIST", visible.getLast().key(), effectiveLimit)
+                                    : null);
+                            response = success(Map.of("records", records, "page", page));
                         }
-                        synchronized (gate) {
-                            need(registration.equals(active.get(target)), "GENERATION_CHANGED");
-                            var finalAccess = access(target, operation, context, fieldNames);
-                            need(initial.equals(finalAccess), "UNAVAILABLE");
-                            need(policyGeneration == epoch, "GENERATION_CHANGED");
-                            return catalog.publishRead(snapshot, () -> {
-                                Map<String, Object> response;
-                                if (get) {
-                                    need(rows.size() <= 1, "ROW_IDENTITY_INVALID");
-                                    response = success(rows.isEmpty() ? Map.of("found", false)
-                                                               : Map.of("found", true, "record",
-                                                                        record(rows.getFirst(),
-                                                                               keys,
-                                                                               keyTypes,
-                                                                               opaque,
-                                                                               binding)));
-                                } else {
-                                    boolean more = rows.size() > effectiveLimit;
-                                    var visible = rows.subList(0, Math.min(effectiveLimit, rows.size()));
-                                    var records = visible.stream()
-                                            .map(r -> record(r, keys, keyTypes, opaque, binding)).toList();
-                                    var page = new LinkedHashMap<String, Object>();
-                                    page.put("limit", effectiveLimit);
-                                    page.put("hasMore", more);
-                                    page.put("next", more
-                                            ? seal(binding, "LIST", visible.getLast().key(), effectiveLimit) : null);
-                                    response = success(Map.of("records", records, "page", page));
-                                }
-                                if (attempt != null) {
-                                    attempt.complete();
-                                }
-                                // Commit can reenter local policy/catalog mutation through a driver callback.
-                                need(registration.equals(active.get(target)), "GENERATION_CHANGED");
-                                need(initial.equals(access(target, operation, context, fieldNames)), "UNAVAILABLE");
-                                need(policyGeneration == epoch, "GENERATION_CHANGED");
-                                need(catalog.current().orElse(null) == snapshot, "GENERATION_CHANGED");
-                                return response;
-                            });
+                        if (attempt != null) {
+                            attempt.complete();
                         }
-                    };
+                        // Commit can reenter local policy/catalog mutation through a driver callback.
+                        need(registration.equals(active.get(target)), "GENERATION_CHANGED");
+                        need(initial.equals(access(target, operation, context, fieldNames)), "UNAVAILABLE");
+                        need(policyGeneration == epoch, "GENERATION_CHANGED");
+                        need(catalog.current().orElse(null) == snapshot, "GENERATION_CHANGED");
+                        return response;
+                    });
+                }
+            };
             java.util.function.BooleanSupplier current = () -> {
                 synchronized (gate) {
                     return policyGeneration == epoch && registration.equals(active.get(target))
@@ -387,7 +384,7 @@ public final class ListGetHost
             byte[] bytes = Base64.getUrlDecoder().decode(token);
             var cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(secret, "AES"),
-                        new GCMParameterSpec(128, bytes, 0, 12));
+                    new GCMParameterSpec(128, bytes, 0, 12));
             cipher.updateAAD(bindingBytes(binding, purpose));
             payload = java.nio.ByteBuffer.wrap(cipher.doFinal(bytes, 12, bytes.length - 12));
             if (payload.remaining() < 17 || (payload.remaining() - 9) % 8 != 0) {
@@ -414,7 +411,7 @@ public final class ListGetHost
     private static Map<String, Object> success(Map<String, Object> output)
     {
         return java.util.Collections.unmodifiableMap(Map.of("status", "success", "diagnostics", List.of(),
-                                                            "output", CdsReadResult.freeze(output)));
+                "output", CdsReadResult.freeze(output)));
     }
 
     private static Map<String, Object> failure(String code)

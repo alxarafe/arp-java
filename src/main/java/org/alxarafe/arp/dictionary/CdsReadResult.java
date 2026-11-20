@@ -46,8 +46,7 @@ public final class CdsReadResult
         if (value == null || value instanceof String || value instanceof Boolean
                 || value instanceof java.math.BigInteger || value instanceof java.math.BigDecimal
                 || value instanceof Integer || value instanceof Long
-                || value instanceof Short || value instanceof Byte)
-        {
+                || value instanceof Short || value instanceof Byte) {
             return value;
         }
         throw new IllegalArgumentException("Decoded sources must use exact portable values");

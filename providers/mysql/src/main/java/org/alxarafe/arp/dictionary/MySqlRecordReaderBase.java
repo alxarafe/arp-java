@@ -87,8 +87,8 @@ public abstract class MySqlRecordReaderBase extends SqlRecordReader
         String provider = (String) facts.get("provider"), id = (String) source.physical().get("id");
         return mariaDb
                 ? new MariaDbObservationProvider(connections, provider, id, source.schema(), source.table(),
-                                                 timeoutSeconds).observe()
+                        timeoutSeconds).observe()
                 : new MySqlObservationProvider(connections, provider, id, source.schema(), source.table(),
-                                               timeoutSeconds).observe();
+                        timeoutSeconds).observe();
     }
 }

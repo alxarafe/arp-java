@@ -59,7 +59,7 @@ public final class CdsReadResolver
 
     private static BigInteger[] range(String lo, String hi)
     {
-        return new BigInteger[]{new BigInteger(lo), new BigInteger(hi)};
+        return new BigInteger[] { new BigInteger(lo), new BigInteger(hi) };
     }
 
     static String pointer(String... parts)
@@ -103,7 +103,7 @@ public final class CdsReadResolver
             return (Map<String, Object>) CdsReadResult.freeze(output);
         } catch (Rejected e) {
             return CdsReadResult.failure(e.code == Code.DICTIONARY_LIMIT_EXCEEDED ? "LIMIT" : "SOURCE_INVALID",
-                                         pointer("sources", source.sourceId()), "definition-invalid").projection();
+                    pointer("sources", source.sourceId()), "definition-invalid").projection();
         }
     }
 
@@ -162,7 +162,7 @@ public final class CdsReadResolver
                 var logical = item.getValue().doc;
                 String at = item.getValue().at;
                 need(indexes.get("physical").containsKey(text(logical, "physical")),
-                     "REFERENCE_NOT_FOUND", at + "/physical");
+                        "REFERENCE_NOT_FOUND", at + "/physical");
                 var physical = indexes.get("physical").get(text(logical, "physical")).doc;
                 var columns = new TreeMap<String, Object>(ORDER);
                 for (Object col : list(physical.get("columns"))) {
@@ -173,8 +173,8 @@ public final class CdsReadResolver
                 var fields = new ArrayList<Object>();
                 for (var column : columns.entrySet()) {
                     fields.add(field(map(column.getValue()),
-                                     map(overlays.getOrDefault(column.getKey(), Map.of())), dictionary,
-                                     at + pointer("fields", column.getKey())));
+                            map(overlays.getOrDefault(column.getKey(), Map.of())), dictionary,
+                            at + pointer("fields", column.getKey())));
                 }
                 models.put(item.getKey(), Map.of("id", item.getKey(), "physical", physical, "fields", fields));
             }
@@ -183,20 +183,19 @@ public final class CdsReadResolver
                 projection(id, List.of(), indexes.get("projections"), models, projected);
             }
             return new CdsReadResult(Map.of("valid",
-                                            true,
-                                            "issues",
-                                            List.of(),
-                                            "models",
-                                            new ArrayList<>(models.values()),
-                                            "projections",
-                                            new ArrayList<>(projected.values())));
+                    true,
+                    "issues",
+                    List.of(),
+                    "models",
+                    new ArrayList<>(models.values()),
+                    "projections",
+                    new ArrayList<>(projected.values())));
         } catch (Failure e) {
             return new CdsReadResult(Map.of("valid", false, "issues", List.of(e.issue)));
         }
     }
 
-    private record Entry(Map<String, Object> doc, String at)
-    {
+    private record Entry(Map<String, Object> doc, String at) {
     }
 
     private static Map<String, Object> map(Object v)
@@ -238,7 +237,7 @@ public final class CdsReadResolver
     {
         return Set.of("minimum", "maximum").containsAll(constraints.keySet())
                 && constraints.values().stream().allMatch(v -> v instanceof String s
-                && s.length() <= 4096 && s.matches("-?(?:0|[1-9][0-9]*)"));
+                        && s.length() <= 4096 && s.matches("-?(?:0|[1-9][0-9]*)"));
     }
 
     private static void physical(Map<String, Object> doc, String at)
@@ -268,7 +267,7 @@ public final class CdsReadResolver
                 }
             }
             need(!values.keySet().containsAll(List.of("minimum", "maximum"))
-                         || values.get("minimum").compareTo(values.get("maximum")) <= 0, "PHYSICAL_INVALID", point);
+                    || values.get("minimum").compareTo(values.get("maximum")) <= 0, "PHYSICAL_INVALID", point);
             var range = col.containsKey("scalarType") ? RANGES.get(text(col, "scalarType")) : null;
             if (range != null) {
                 for (var v : values.values()) {
@@ -278,7 +277,7 @@ public final class CdsReadResolver
             if (col.containsKey("decimalGeometry")) {
                 var g = object(col, "decimalGeometry");
                 need(decimal(g.get("scale")).compareTo(decimal(g.get("precision"))) <= 0,
-                     "PHYSICAL_INVALID", point);
+                        "PHYSICAL_INVALID", point);
             }
         }
         need(names.containsAll(list(doc.getOrDefault("primaryKey", List.of()))), "PHYSICAL_INVALID", at);
@@ -287,8 +286,9 @@ public final class CdsReadResolver
         }
         for (Object item : list(doc.getOrDefault("foreignKeys", List.of()))) {
             var key = map(item);
-            need(names.containsAll(list(key.get("columns"))) && list(key.get("columns")).size()
-                    == list(object(key, "target").get("columns")).size(), "PHYSICAL_INVALID", at);
+            need(names.containsAll(list(key.get("columns")))
+                    && list(key.get("columns")).size() == list(object(key, "target").get("columns")).size(),
+                    "PHYSICAL_INVALID", at);
         }
         for (String key : List.of("indexes", "foreignKeys")) {
             var ids = new HashSet<String>();
@@ -342,9 +342,9 @@ public final class CdsReadResolver
         }
         if (!context.isEmpty()) {
             need(type != null && RANGES.containsKey(type) && interval(intrinsic),
-                 "PROFILE_UNSUPPORTED", at + "/constraints");
+                    "PROFILE_UNSUPPORTED", at + "/constraints");
             need(Set.of("minimum", "maximum").containsAll(context.keySet()),
-                 "PROFILE_UNSUPPORTED", at + "/constraints");
+                    "PROFILE_UNSUPPORTED", at + "/constraints");
         }
         if (type != null && RANGES.containsKey(type) && interval(intrinsic)) {
             var range = RANGES.get(type);
@@ -354,7 +354,7 @@ public final class CdsReadResolver
                 if (context.containsKey(key)) {
                     var v = bound(context.get(key), at + "/constraints/" + key);
                     need(key.equals("minimum") ? v.compareTo(lo) >= 0 : v.compareTo(hi) <= 0,
-                         "CONSTRAINT_WEAKENING", at + "/constraints/" + key);
+                            "CONSTRAINT_WEAKENING", at + "/constraints/" + key);
                     if (key.equals("minimum")) {
                         lo = v;
                     } else {
@@ -371,7 +371,7 @@ public final class CdsReadResolver
                 var plo = p[0].max(new BigInteger((String) extent.getOrDefault("minimum", p[0].toString())));
                 var phi = p[1].min(new BigInteger((String) extent.getOrDefault("maximum", p[1].toString())));
                 need(plo.compareTo(lo) <= 0 && hi.compareTo(phi) <= 0,
-                     "DOMAIN_NOT_REPRESENTABLE", at, "physical-incompatible");
+                        "DOMAIN_NOT_REPRESENTABLE", at, "physical-incompatible");
                 out.put("compatibility", "compatible");
             }
         }
@@ -393,7 +393,7 @@ public final class CdsReadResolver
         need(stack.size() < 64, "LIMIT", at + "/source");
         var operations = list(doc.get("operations"));
         need(List.of("LIST", "GET").containsAll(operations), "OPERATION_UNSUPPORTED",
-             at + "/operations", "operation-not-allowed");
+                at + "/operations", "operation-not-allowed");
         var source = object(doc, "source");
         String entity;
         List<Object> fields;
@@ -429,7 +429,7 @@ public final class CdsReadResolver
             selected.add(publicField);
         }
         var result = Map.<String, Object>of("id", id, "source", source, "entity", entity,
-                                            "fields", selected, "operations", operations);
+                "fields", selected, "operations", operations);
         out.put(id, result);
         return result;
     }
@@ -485,9 +485,9 @@ public final class CdsReadResolver
                 return false;
             }
             if (s.containsKey("pattern") && !java.util.regex.Pattern.compile(text(s, "pattern"),
-                                                                             java.util.regex.Pattern.UNICODE_CHARACTER_CLASS).matcher(
-                    string).find())
-            {
+                    java.util.regex.Pattern.UNICODE_CHARACTER_CLASS).matcher(
+                            string)
+                    .find()) {
                 return false;
             }
         }

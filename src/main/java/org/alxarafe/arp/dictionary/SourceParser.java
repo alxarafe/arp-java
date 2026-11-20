@@ -43,7 +43,8 @@ final class SourceParser
         }
         try {
             var text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(source.content())).toString();
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(source.content()))
+                    .toString();
             Object value = source.encoding() == Source.Encoding.JSON ? json(text) : yaml(text);
             JsonSupport.unicode(value);
             return value;
@@ -90,8 +91,7 @@ final class SourceParser
     private Object yaml(String text)
     {
         if (text.indexOf('\u0085') >= 0 || text.indexOf('\u2028') >= 0 || text.indexOf('\u2029') >= 0
-                || text.replace("\r\n", "").indexOf('\r') >= 0)
-        {
+                || text.replace("\r\n", "").indexOf('\r') >= 0) {
             throw Rejected.document();
         }
         var settings = LoadSettings.builder().setSchema(new JsonSchema())
@@ -138,8 +138,7 @@ final class SourceParser
                 }
             }
             if (token instanceof DirectiveToken<?> || token instanceof AliasToken
-                    || token instanceof AnchorToken || token instanceof TagToken)
-            {
+                    || token instanceof AnchorToken || token instanceof TagToken) {
                 throw Rejected.document();
             }
         }

@@ -46,8 +46,7 @@ public final class CatalogBuilder
                     throw new Rejected(Code.DICTIONARY_FORMAT_UNSUPPORTED);
                 }
                 if (!document.keySet().equals(Set.of("apiVersion", "elements"))
-                        || !(document.get("elements") instanceof List<?> definitions) || definitions.isEmpty())
-                {
+                        || !(document.get("elements") instanceof List<?> definitions) || definitions.isEmpty()) {
                     throw Rejected.document();
                 }
                 if (definitions.size() > limits.maxElementsPerSource()) {
@@ -70,9 +69,9 @@ public final class CatalogBuilder
                 }
             } catch (Rejected rejected) {
                 var issue = new Issue(rejected.code,
-                                      id,
-                                      null,
-                                      new Provenance(source.providerId(), source.sourceId(), path));
+                        id,
+                        null,
+                        new Provenance(source.providerId(), source.sourceId(), path));
                 return new BuildResult(Optional.empty(), List.of(issue));
             }
         }

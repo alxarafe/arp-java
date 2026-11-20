@@ -57,7 +57,7 @@ class PostgreSqlIntegrationTest
         admin = DriverManager.getConnection(URL, "arpcds", PASSWORD);
         assertEquals("arpcds", scalar("SELECT current_database()"));
         assertEquals(System.getenv("ARP_CDS_RUN_TOKEN"), scalar("SELECT token FROM public.__arp_cds_test_owner"),
-                     "Owned run nonce required before DDL");
+                "Owned run nonce required before DDL");
         exec("CREATE SCHEMA " + SCOPE + "; SET search_path TO " + SCOPE);
         exec("CREATE TABLE sentinel(marker text); INSERT INTO sentinel VALUES ('unchanged')");
         setup = Files.readString(ConformanceTest.ROOT.resolve("examples/demo/sql/postgresql.sql"));
@@ -80,8 +80,8 @@ class PostgreSqlIntegrationTest
         original = JsonSupport.write(definitions);
         physicalId = vector.at("/input/physical/storage/id").asText();
         dictionary = new CatalogBuilder().buildCatalog(List.of(new Source("fixture", "dictionary", Source.Encoding.JSON,
-                                                                          Files.readAllBytes(ConformanceTest.ROOT.resolve(
-                                                                                  "fixtures/dictionary/v1/catalog.json")))))
+                Files.readAllBytes(ConformanceTest.ROOT.resolve(
+                        "fixtures/dictionary/v1/catalog.json")))))
                 .catalog().orElseThrow();
     }
 
@@ -113,7 +113,7 @@ class PostgreSqlIntegrationTest
     private static Counting observer(String table)
     {
         return new Counting(new PostgreSqlObservationProvider(PostgreSqlIntegrationTest::connect,
-                                                              "primary", physicalId, SCOPE, table, 5));
+                "primary", physicalId, SCOPE, table, 5));
     }
 
     private static PhysicalCatalog session(Counting provider)
@@ -182,9 +182,9 @@ class PostgreSqlIntegrationTest
                     }
                     ConformanceTest.assertJson(facts.get("primaryKey"), physical.get("primaryKey"));
                     ConformanceTest.assertJson(facts.get("rating.integerRange"),
-                                               physical.at("/columns/2/integerRange"));
+                            physical.at("/columns/2/integerRange"));
                     ConformanceTest.assertJson(facts.get("code.characterLength"),
-                                               physical.at("/columns/1/characterLength"));
+                            physical.at("/columns/1/characterLength"));
                     assertEquals("compatible", result.at("/models/0/fields/2/compatibility").asText());
                 }
                 case "add-column-and-invalidate" -> {
@@ -199,7 +199,7 @@ class PostgreSqlIntegrationTest
                     assertEquals(2, provider.count);
                     assertions(node(result.projection()), c.get("assert"));
                     ConformanceTest.assertJson(node(first.projection()).get("projections"),
-                                               node(result.projection()).get("projections"));
+                            node(result.projection()).get("projections"));
                 }
                 case "remove-specialized-column-and-invalidate" -> {
                     exec(c.get("ddl").asText());
@@ -238,8 +238,8 @@ class PostgreSqlIntegrationTest
     void additionalIntegration() throws Exception
     {
         exec("CREATE TABLE parent(a int,b int,PRIMARY KEY(a,b)); CREATE TABLE keys_table(a int,b int,"
-                     + "note varchar(12),PRIMARY KEY(a,b),CONSTRAINT fk_pair FOREIGN KEY(a,b) REFERENCES parent(a,b));"
-                     + "CREATE INDEX ix_note ON keys_table(note)");
+                + "note varchar(12),PRIMARY KEY(a,b),CONSTRAINT fk_pair FOREIGN KEY(a,b) REFERENCES parent(a,b));"
+                + "CREATE INDEX ix_note ON keys_table(note)");
         var keys = node(observer("keys_table").observe());
         ConformanceTest.assertJson(ConformanceTest.JSON.readTree("[\"a\",\"b\"]"), keys.get("primaryKey"));
         ConformanceTest.assertJson(keys.get("primaryKey"), keys.at("/foreignKeys/0/columns"));
@@ -250,8 +250,8 @@ class PostgreSqlIntegrationTest
         assertFalse(node(observer("keys_table").observe()).has("indexes"));
         ADDITIONAL.add("unrepresentable-index-presence");
         exec("CREATE DOMAIN local_int AS integer NOT NULL; CREATE TABLE types_test(opaque jsonb, custom local_int,"
-                     + "large bigint, generated integer GENERATED ALWAYS AS (1) STORED,"
-                     + "ident integer GENERATED ALWAYS AS IDENTITY)");
+                + "large bigint, generated integer GENERATED ALWAYS AS (1) STORED,"
+                + "ident integer GENERATED ALWAYS AS IDENTITY)");
         var types = node(observer("types_test").observe());
         assertFalse(types.at("/columns/0").has("scalarType"));
         assertFalse(types.at("/columns/1").has("scalarType"));
@@ -268,30 +268,29 @@ class PostgreSqlIntegrationTest
                 "apiVersion", "arp.logical/v1", "id", "demo.checked", "physical", physicalId,
                 "fields", Map.of("value", Map.of("dictionary", "test.int16")))), "projections", Map.of());
         var checkedCatalog = new PhysicalCatalog(dictionary, checkedDefinitions, Map.of("storage",
-                                                                                        observer("checked")));
+                observer("checked")));
         assertEquals("not-verified", node(checkedCatalog.resolve().projection())
                 .at("/models/0/fields/0/compatibility").asText());
         ADDITIONAL.add("native-check-no-false-compatibility");
 
         exec("CREATE TABLE \"Odd.Table\"(id int)");
         assertEquals(1,
-                     node(observer("Odd.Table").observe()).get("columns").size());
+                node(observer("Odd.Table").observe()).get("columns").size());
         ADDITIONAL.add("literal-physical-identifiers");
         exec("CREATE ROLE limited LOGIN PASSWORD '" + PASSWORD + "'; GRANT USAGE ON SCHEMA arp_scope TO limited;"
-                     + "GRANT SELECT(id) ON items TO limited");
+                + "GRANT SELECT(id) ON items TO limited");
         try (var limited = DriverManager.getConnection(URL, "limited", PASSWORD);
-             var s = limited.createStatement();
-             var rs = s.executeQuery("SELECT count(*) FROM information_schema.columns WHERE"
-                                             + " table_schema='arp_scope' AND table_name='items'"))
-        {
+                var s = limited.createStatement();
+                var rs = s.executeQuery("SELECT count(*) FROM information_schema.columns WHERE"
+                        + " table_schema='arp_scope' AND table_name='items'")) {
             assertTrue(rs.next());
             assertEquals(1, rs.getInt(1), "Real column-level metadata visibility");
         }
         var denied = new Counting(new PostgreSqlObservationProvider(
                 () -> DriverManager.getConnection(URL, "limited", PASSWORD), "primary", physicalId, SCOPE, "items", 5));
         assertEquals(CdsReadResult.failure("OBSERVATION_FAILED", "/providers/primary",
-                                           "execution-failure").projection(),
-                     session(denied).resolve().projection());
+                "execution-failure").projection(),
+                session(denied).resolve().projection());
         ADDITIONAL.add("permissions-incomplete-metadata-no-partial-publication");
         exec("CREATE VIEW view_test AS SELECT id FROM items");
         for (String name : List.of("missing_table", "view_test")) {
@@ -299,14 +298,14 @@ class PostgreSqlIntegrationTest
         }
         assertEquals("unchanged", scalar("SELECT marker FROM sentinel"));
         assertEquals("0",
-                     scalar("SELECT count(*) FROM items"));
+                scalar("SELECT count(*) FROM items"));
         ADDITIONAL.add("missing-view-readonly-and-sentinel-preservation");
         var goodObserver = observer("items");
         var atomic = new PhysicalCatalog(dictionary, definitions,
-                                         Map.of("storage", goodObserver, "zz", observer("missing_table")));
+                Map.of("storage", goodObserver, "zz", observer("missing_table")));
         assertEquals(CdsReadResult.failure("OBSERVATION_FAILED", "/providers/primary",
-                                           "execution-failure").projection(),
-                     atomic.resolve().projection());
+                "execution-failure").projection(),
+                atomic.resolve().projection());
         assertTrue(atomic.current().isEmpty());
         assertEquals(1, goodObserver.count);
         ADDITIONAL.add("multi-provider-no-partial-publication");
@@ -322,13 +321,12 @@ class PostgreSqlIntegrationTest
         exec("DROP VIEW view_test; ALTER TABLE items ALTER COLUMN id TYPE smallint");
         narrowed.invalidate();
         assertEquals(CdsReadResult.failure("DOMAIN_NOT_REPRESENTABLE", "/logical/model/fields/id",
-                                           "physical-incompatible").projection(), narrowed.resolve().projection());
+                "physical-incompatible").projection(), narrowed.resolve().projection());
         assertTrue(narrowed.current().isEmpty());
         assertEquals(authored, JsonSupport.write(narrowDefinitions));
         assertEquals(original, JsonSupport.write(definitions));
         assertEquals("INT32", node(beforeNarrowing.projection()).at("/models/0/fields/1/physical/scalarType").asText());
         ADDITIONAL.add("real-narrowing-incompatible");
-
 
     }
 
@@ -337,15 +335,15 @@ class PostgreSqlIntegrationTest
     {
         if (admin != null) {
             System.out.println(JsonSupport.write(Map.of("stack",
-                                                        "java",
-                                                        "contractCases",
-                                                        CONTRACT,
-                                                        "additionalCases",
-                                                        ADDITIONAL,
-                                                        "engineVersion",
-                                                        scalar("SHOW server_version"),
-                                                        "contractSha",
-                                                        ConformanceTest.SHA)));
+                    "java",
+                    "contractCases",
+                    CONTRACT,
+                    "additionalCases",
+                    ADDITIONAL,
+                    "engineVersion",
+                    scalar("SHOW server_version"),
+                    "contractSha",
+                    ConformanceTest.SHA)));
             admin.close();
         }
     }
